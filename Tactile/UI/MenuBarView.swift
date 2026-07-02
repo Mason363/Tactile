@@ -9,6 +9,7 @@ struct MenuBarView: View {
     @EnvironmentObject private var controller: AppController
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var permission: PermissionManager
+    @ObservedObject private var updater = Updater.shared
 
     var body: some View {
         if !permission.isTrusted {
@@ -48,6 +49,11 @@ struct MenuBarView: View {
             SettingsWindow.show(controller: controller)
         }
         .keyboardShortcut(",")
+
+        Button("Check for Updates…") {
+            updater.checkForUpdates()
+        }
+        .disabled(!updater.canCheckForUpdates)
 
         Divider()
 

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"
+     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Tactile</title>
+    <link>https://github.com/Mason363/Tactile</link>
+    <description>Updates for Tactile.</description>
+    <language>en</language>
+    <!--
+      Sparkle reads this feed (SUFeedURL in Info.plist) to decide whether an
+      update exists. The item below advertises the currently shipping version,
+      so "Check for Updates…" reports "up to date" until a newer item is added.
+
+      To publish an update:
+        1. Bump sparkle:version (CFBundleVersion) and shortVersionString.
+        2. Add an <enclosure url="…Tactile-x.y.z.zip" sparkle:edSignature="…"
+           length="…"/> pointing at the notarized, zipped app on a GitHub
+           release, signed with Sparkle's `sign_update`.
+        3. Fill SUPublicEDKey in the build settings with the matching public key
+           from `generate_keys` (see README → Releasing).
+    -->
+    <item>
+      <title>1.0</title>
+      <sparkle:version>1</sparkle:version>
+      <sparkle:shortVersionString>1.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <pubDate>Wed, 02 Jul 2026 00:00:00 +0000</pubDate>
+      <description><![CDATA[<p>Initial public release.</p>]]></description>
+    </item>
+  </channel>
+</rss>
