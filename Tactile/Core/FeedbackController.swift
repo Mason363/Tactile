@@ -7,13 +7,15 @@ import AppKit
 import os
 import QuartzCore
 
-/// Decides whether a resolved element deserves a tick, and fires the engines.
+/// Decides what a resolved element should feel like, and plays it.
 ///
 /// Feedback fires once per element *enter* — never continuously — and only
 /// when the element's category is enabled, its app isn't excluded, the rate
-/// limit allows it, and any dwell delay has elapsed. Optionally, leaving an
-/// element that ticked also ticks, unless the cursor moved straight onto
-/// another ticking element (then the enter tick alone marks the transition).
+/// limit allows it, and any dwell delay has elapsed. What plays is a
+/// waveform chosen by context: the category's own waveform, the danger
+/// waveform for destructive controls, with an extra confirmation pulse for
+/// checked/selected state. Leaving a fired element can play an exit
+/// waveform, and window-boundary crossings and screen edges have theirs.
 @MainActor
 final class FeedbackController {
     var config: FeedbackConfig
@@ -23,11 +25,12 @@ final class FeedbackController {
 
     private let haptics = SystemHapticEngine()
     private let audio = AudioFeedbackEngine()
+    private let player = WaveformPlayer()
 
     private var lastElement: AXUIElement?
-    /// Category the current element ticked with, if it did — the exit tick
-    /// reuses it so hover-out feels consistent with hover-in.
-    private var firedCategory: FeedbackCategory?
+    private var lastWindow: AXUIElement?
+    /// Set when the current element fired, so hover-out knows to play.
+    private var firedForCurrentElement = false
     private var lastTickTime: CFTimeInterval = 0
     private var dwellTimer: Timer?
     private var vibrateTimer: Timer?
@@ -54,6 +57,8 @@ final class FeedbackController {
             lastElement = nil
             return
         }
+
+        handleWindowBoundary(resolved)
 
         let rawCategory = ClickabilityClassifier.classify(
             role: resolved.role,
@@ -90,31 +95,69 @@ final class FeedbackController {
         leaveCurrentElement(enteringFiringElement: firesOnEnter)
         lastElement = resolved.element
 
-        guard firesOnEnter, let category else { return }
+        guard let category, !isExcluded(resolved.bundleID) else { return }
 
+        // Disabled controls: optional single light pulse instead of silence,
+        // so you can feel that something is there but inactive.
+        if !resolved.enabled {
+            if config.feelDisabled, config.enabledCategories.contains(category) {
+                play(.single(.alignment))
+            }
+            return
+        }
+
+        guard firesOnEnter else { return }
+
+        let waveform = styledWaveform(for: category, resolved: resolved)
         if config.dwellDelay > 0 {
             dwellTimer = Timer.scheduledTimer(withTimeInterval: config.dwellDelay, repeats: false) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    self.fire(category)
-                    self.firedCategory = category
-                    self.startVibrationIfEnabled(category)
+                    self.play(waveform)
+                    self.firedForCurrentElement = true
+                    self.startVibrationIfEnabled()
                 }
             }
         } else {
-            fire(category)
-            firedCategory = category
-            startVibrationIfEnabled(category)
+            play(waveform)
+            firedForCurrentElement = true
+            startVibrationIfEnabled()
         }
+    }
+
+    /// Called by the pipeline when the cursor touches an outer screen edge.
+    func screenEdgeBump() {
+        guard config.screenEdgesEnabled else { return }
+        play(config.edgeWaveform)
     }
 
     /// Forgets the current element so re-entering it ticks again.
     func reset() {
         lastElement = nil
-        firedCategory = nil
+        lastWindow = nil
+        firedForCurrentElement = false
         dwellTimer?.invalidate()
         dwellTimer = nil
         stopVibration()
+        player.cancel()
+    }
+
+    // MARK: - Waveform selection
+
+    /// Danger context overrides the category waveform; checked/selected
+    /// state appends a confirmation pulse.
+    private func styledWaveform(for category: FeedbackCategory, resolved: ResolvedElement) -> HapticWaveform {
+        if config.dangerEnabled, ContextDetector.isDanger(title: resolved.title, subrole: resolved.subrole) {
+            return config.dangerWaveform
+        }
+
+        var waveform = config.waveforms[category] ?? .single(category.defaultPattern)
+        if config.stateAware, resolved.isOn == true, var last = waveform.steps.last {
+            last.gapMs = max(last.gapMs, 110)
+            waveform.steps[waveform.steps.count - 1] = last
+            waveform.steps.append(WaveformStep(strength: .alignment, gapMs: 0))
+        }
+        return waveform
     }
 
     private func willFire(_ category: FeedbackCategory, resolved: ResolvedElement) -> Bool {
@@ -123,26 +166,56 @@ final class FeedbackController {
             && !isExcluded(resolved.bundleID)
     }
 
-    /// Ends the current element, firing the hover-out tick when configured.
-    /// The exit tick is skipped when the cursor lands directly on another
-    /// ticking element — one transition, one tick.
+    private func isExcluded(_ bundleID: String?) -> Bool {
+        guard let bundleID else { return false }
+        return config.excludedBundleIDs.contains(bundleID)
+    }
+
+    // MARK: - Transitions
+
+    /// Ends the current element, playing the hover-out waveform when
+    /// configured. Skipped when the cursor lands directly on another firing
+    /// element — one transition, one feel.
     private func leaveCurrentElement(enteringFiringElement: Bool) {
         dwellTimer?.invalidate()
         dwellTimer = nil
         stopVibration()
-        if config.hapticOnExit, !enteringFiringElement, let firedCategory {
-            fire(firedCategory)
+        if config.hapticOnExit, !enteringFiringElement, firedForCurrentElement {
+            play(config.exitWaveform)
         }
-        firedCategory = nil
+        firedForCurrentElement = false
+    }
+
+    /// A window change under the cursor is a spatial boundary worth feeling.
+    private func handleWindowBoundary(_ resolved: ResolvedElement) {
+        guard config.windowBoundsEnabled else { return }
+        defer { if resolved.window != nil { lastWindow = resolved.window } }
+        guard let window = resolved.window, let lastWindow, !CFEqual(lastWindow, window) else { return }
+        play(config.boundaryWaveform)
+    }
+
+    // MARK: - Playback
+
+    private func play(_ waveform: HapticWaveform) {
+        let now = CACurrentMediaTime()
+        guard config.rateLimitInterval == 0 || now - lastTickTime >= config.rateLimitInterval else { return }
+        lastTickTime = now
+
+        player.play(waveform, on: hapticEngine)
+        if config.audioEnabled {
+            audio.volume = config.audioVolume
+            audio.soundName = config.audioSoundName
+            audio.tick(waveform.steps.first?.strength ?? .generic)
+        }
     }
 
     // MARK: - Hover vibration
 
     /// A stream of rapid pulses reads as a continuous buzz. Pulses go
     /// straight to the actuator with their own strength setting — the rate
-    /// limit governs discrete ticks, and the click sound stays out of it
+    /// limit governs discrete events, and the click sound stays out of it
     /// entirely. The vibration mode shapes the gaps between pulses.
-    private func startVibrationIfEnabled(_ category: FeedbackCategory) {
+    private func startVibrationIfEnabled() {
         guard config.vibrateOnHover else { return }
         stopVibration()
         scheduleNextVibratePulse()
@@ -169,25 +242,6 @@ final class FeedbackController {
         vibrateTimer?.invalidate()
         vibrateTimer = nil
         vibrateStep = 0
-    }
-
-    private func isExcluded(_ bundleID: String?) -> Bool {
-        guard let bundleID else { return false }
-        return config.excludedBundleIDs.contains(bundleID)
-    }
-
-    private func fire(_ category: FeedbackCategory) {
-        let now = CACurrentMediaTime()
-        guard now - lastTickTime >= config.rateLimitInterval else { return }
-        lastTickTime = now
-
-        let pattern = config.patterns[category] ?? category.defaultPattern
-        hapticEngine.tick(pattern)
-        if config.audioEnabled {
-            audio.volume = config.audioVolume
-            audio.soundName = config.audioSoundName
-            audio.tick(pattern)
-        }
     }
 
     /// Minimal hysteresis for positions that didn't resolve to a clickable

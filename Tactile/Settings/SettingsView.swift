@@ -12,12 +12,18 @@ struct SettingsView: View {
                 .tabItem { Label("General", systemImage: "gearshape") }
             TriggerSettingsView()
                 .tabItem { Label("Triggers", systemImage: "cursorarrow.rays") }
+            ContextSettingsView()
+                .tabItem { Label("Context", systemImage: "exclamationmark.bubble") }
             AppExclusionView()
                 .tabItem { Label("Apps", systemImage: "app.badge.checkmark") }
             SoundSettingsView()
                 .tabItem { Label("Sound", systemImage: "speaker.wave.2") }
+            PlaygroundView()
+                .tabItem { Label("Playground", systemImage: "hand.point.up.left") }
+            ProfilesView()
+                .tabItem { Label("Profiles", systemImage: "person.crop.rectangle.stack") }
         }
-        .frame(width: 480, height: 560)
+        .frame(width: 560, height: 580)
     }
 }
 
@@ -152,15 +158,8 @@ struct TriggerSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Text("Choose which elements tap the trackpad when the cursor passes over them, and how each one feels.")
+                Text("Choose which elements play a waveform when the cursor passes over them, and how each one feels. Danger, state, hover-out, and spatial feel live in the Context tab.")
                     .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                Toggle("Also tap when leaving an element", isOn: $settings.hapticOnExit)
-                Text("Marks both edges of a control — one tap entering, one leaving — so you can feel its extent. Moving directly from one control to the next still taps only once.")
-                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
@@ -217,10 +216,10 @@ private struct CategoryRow: View {
         )
     }
 
-    private var pattern: Binding<FeedbackPattern> {
+    private var waveform: Binding<HapticWaveform> {
         Binding(
-            get: { settings.categoryPattern[category] ?? category.defaultPattern },
-            set: { settings.categoryPattern[category] = $0 }
+            get: { settings.categoryWaveforms[category] ?? .single(category.defaultPattern) },
+            set: { settings.categoryWaveforms[category] = $0 }
         )
     }
 
@@ -231,26 +230,8 @@ private struct CategoryRow: View {
 
                 Spacer()
 
-                Picker("Pattern for \(category.displayName)", selection: pattern) {
-                    ForEach(FeedbackPattern.allCases) { pattern in
-                        Text(pattern.displayName).tag(pattern)
-                    }
-                }
-                .labelsHidden()
-                .fixedSize()
-                .disabled(!isEnabled.wrappedValue)
-
-                Button("Try") {
-                    let engine: FeedbackEngine
-                    if settings.useEnhancedHaptics, let actuator = ActuatorHapticEngine.shared {
-                        engine = actuator
-                    } else {
-                        engine = SystemHapticEngine()
-                    }
-                    engine.tick(pattern.wrappedValue)
-                }
-                .disabled(!isEnabled.wrappedValue)
-                .accessibilityLabel("Try the pattern for \(category.displayName)")
+                WaveformControl(waveform: waveform, accessibilityName: category.displayName)
+                    .disabled(!isEnabled.wrappedValue)
             }
             Text(category.explanation)
                 .font(.caption)

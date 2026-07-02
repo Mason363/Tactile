@@ -34,6 +34,11 @@ final class CursorMonitor {
     /// coalesces to one in-flight query, so cost stays bounded.
     var unthrottled = false
 
+    /// Fires once each time the cursor touches an outer screen edge.
+    var onScreenEdge: (() -> Void)?
+    var screenEdgesEnabled = false
+    private var atScreenEdge = false
+
     /// While the cursor stays inside this rect no new samples are emitted.
     /// Set by the pipeline after each resolution.
     var skipRegion: CGRect?
@@ -100,6 +105,10 @@ final class CursorMonitor {
         cancelTrailingSample()
         guard let point = currentPoint() else { return }
 
+        if screenEdgesEnabled {
+            checkScreenEdge(point)
+        }
+
         if let lastPoint, hypot(point.x - lastPoint.x, point.y - lastPoint.y) < minDistance {
             return
         }
@@ -135,5 +144,37 @@ final class CursorMonitor {
     /// both `AXUIElementCopyElementAtPosition` and AX element frames use.
     private func currentPoint() -> CGPoint? {
         CGEvent(source: nil)?.location
+    }
+
+    // MARK: - Screen edges
+
+    /// Bumps once when the cursor reaches an outer edge of the display
+    /// arrangement (edges shared with another display don't count — the
+    /// cursor passes through those). Pure math, no accessibility calls.
+    private func checkScreenEdge(_ point: CGPoint) {
+        var displays = [CGDirectDisplayID](repeating: 0, count: 8)
+        var count: UInt32 = 0
+        guard CGGetActiveDisplayList(8, &displays, &count) == .success, count > 0 else { return }
+        let bounds = (0..<Int(count)).map { CGDisplayBounds(displays[$0]) }
+
+        guard let screen = bounds.first(where: { $0.insetBy(dx: -1, dy: -1).contains(point) }) else { return }
+
+        let others = bounds.filter { $0 != screen }
+        let touching =
+            (point.x <= screen.minX + 1 && !others.contains { abs($0.maxX - screen.minX) < 2 && $0.minY < point.y && point.y < $0.maxY })
+            || (point.x >= screen.maxX - 2 && !others.contains { abs($0.minX - screen.maxX) < 2 && $0.minY < point.y && point.y < $0.maxY })
+            || (point.y <= screen.minY + 1 && !others.contains { abs($0.maxY - screen.minY) < 2 && $0.minX < point.x && point.x < $0.maxX })
+            || (point.y >= screen.maxY - 2 && !others.contains { abs($0.minY - screen.maxY) < 2 && $0.minX < point.x && point.x < $0.maxX })
+
+        if touching {
+            if !atScreenEdge {
+                atScreenEdge = true
+                onScreenEdge?()
+            }
+        } else if atScreenEdge,
+                  point.x > screen.minX + 8, point.x < screen.maxX - 9,
+                  point.y > screen.minY + 8, point.y < screen.maxY - 9 {
+            atScreenEdge = false
+        }
     }
 }

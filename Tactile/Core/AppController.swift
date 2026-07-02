@@ -41,6 +41,9 @@ final class AppController: ObservableObject {
         cursorMonitor.onSample = { [weak self] point in
             self?.resolver.resolve(at: point)
         }
+        cursorMonitor.onScreenEdge = { [weak self] in
+            self?.feedback.screenEdgeBump()
+        }
         resolver.onResolve = { [weak self] point, resolved in
             self?.feedback.handle(point: point, resolved: resolved)
         }
@@ -101,6 +104,8 @@ final class AppController: ObservableObject {
         feedback.config = settings.makeConfig()
         cursorMonitor.sampleInterval = 1.0 / max(settings.pollingHz, 1)
         cursorMonitor.unthrottled = settings.noLagMode
+        cursorMonitor.screenEdgesEnabled = settings.screenEdgesEnabled
+        resolver.wantsWindow = settings.windowBoundsEnabled
     }
 
     private func startPipeline() {

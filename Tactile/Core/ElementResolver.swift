@@ -9,14 +9,20 @@ import ApplicationServices
 /// Everything the pipeline needs to know about the element under the cursor.
 struct ResolvedElement {
     let element: AXUIElement
-    let role: String
-    let subrole: String?
-    let actions: [String]
+    var role: String
+    var subrole: String?
+    var actions: [String]
     /// Element frame in global top-left coordinates, when the app reports one.
-    let frame: CGRect?
-    let pid: pid_t
-    let bundleID: String?
-    let enabled: Bool
+    var frame: CGRect?
+    var pid: pid_t
+    var bundleID: String?
+    var enabled: Bool
+    /// Label text, fetched only for clickable elements (danger detection).
+    var title: String?
+    /// Checked/selected state, fetched only for toggles and tabs.
+    var isOn: Bool?
+    /// Containing window, fetched only when window-boundary feedback is on.
+    var window: AXUIElement?
 }
 
 /// Hit-tests the accessibility tree on a background queue.
@@ -28,6 +34,10 @@ struct ResolvedElement {
 final class ElementResolver {
     /// Delivered on the main actor with the position that was resolved.
     var onResolve: (@MainActor (CGPoint, ResolvedElement?) -> Void)?
+
+    /// When true, resolutions include the containing window (one extra AX
+    /// call) so the pipeline can feel window-boundary crossings.
+    var wantsWindow = false
 
     private let queue = DispatchQueue(label: "com.masonchen.Tactile.resolver", qos: .userInteractive)
     private let systemWide = AXUIElementCreateSystemWide()
@@ -90,7 +100,7 @@ final class ElementResolver {
         guard error == .success, let element = elementRef else { return nil }
 
         let resolved = makeResolved(element)
-        if isClickable(resolved) { return resolved }
+        if isClickable(resolved) { return enrich(resolved) }
 
         // Everything below is best-effort recovery of a clickable element
         // from a container, capped by a wall-clock deadline so a slow app
@@ -101,7 +111,7 @@ final class ElementResolver {
         // the text label of a button, a span inside a link. Look a few
         // ancestors up for a clickable element that still contains the cursor.
         if let ancestor = clickableAncestor(of: element, containing: point, deadline: deadline) {
-            return ancestor
+            return enrich(ancestor)
         }
 
         // Some apps (web content especially) hit-test lazily: the padding
@@ -109,7 +119,7 @@ final class ElementResolver {
         // button's own frame contains the point. The button is a child of
         // that group, so descend spatially through containing children.
         if let descendant = clickableDescendant(of: element, containing: point, depth: 2, deadline: deadline) {
-            return descendant
+            return enrich(descendant)
         }
 
         // Tab strips (Chrome, native AXTabGroup) hit-test to an inert wrapper
@@ -117,10 +127,47 @@ final class ElementResolver {
         // exposed via AXTabs nor reachable by the shallow descent. Resolve
         // the individual tab the cursor is over with a dedicated search.
         if let tab = tabUnderCursor(near: element, point: point) {
-            return tab
+            return enrich(tab)
         }
 
-        return resolved
+        return enrich(resolved)
+    }
+
+    /// Adds the detail attributes downstream features need — label text for
+    /// danger detection, checked/selected state, containing window — fetching
+    /// each only when something will actually use it.
+    private func enrich(_ resolved: ResolvedElement) -> ResolvedElement {
+        var enriched = resolved
+
+        if wantsWindow {
+            var windowRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(resolved.element, "AXWindow" as CFString, &windowRef) == .success,
+               let value = windowRef, CFGetTypeID(value) == AXUIElementGetTypeID() {
+                enriched.window = (value as! AXUIElement)
+            }
+        }
+
+        guard let category = ClickabilityClassifier.classify(
+            role: resolved.role,
+            subrole: resolved.subrole,
+            actions: resolved.actions
+        ) else { return enriched }
+
+        enriched.title = stringAttribute(resolved.element, "AXTitle")
+        if enriched.title?.isEmpty != false {
+            enriched.title = stringAttribute(resolved.element, "AXDescription")
+        }
+
+        switch category {
+        case .toggle:
+            enriched.isOn = numberAttribute(resolved.element, "AXValue").map { $0 > 0 }
+        case .tab:
+            enriched.isOn = boolAttribute(resolved.element, "AXSelected")
+                ?? numberAttribute(resolved.element, "AXValue").map { $0 > 0 }
+        default:
+            break
+        }
+        return enriched
     }
 
     /// Walks up to an enclosing AXTabGroup and finds the AXTabButton under
@@ -269,6 +316,12 @@ final class ElementResolver {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
         return value as? Bool
+    }
+
+    private func numberAttribute(_ element: AXUIElement, _ attribute: String) -> Int? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
+        return (value as? NSNumber)?.intValue
     }
 
     private func actionNames(_ element: AXUIElement) -> [String] {

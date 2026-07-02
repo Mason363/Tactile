@@ -34,6 +34,16 @@ struct MenuBarView: View {
 
         Divider()
 
+        if !settings.profiles.isEmpty {
+            Menu("Profiles") {
+                ForEach(settings.profiles) { profile in
+                    Button(profile.name) {
+                        settings.apply(profile.snapshot)
+                    }
+                }
+            }
+        }
+
         Button("Settings…") {
             SettingsWindow.show(controller: controller)
         }
