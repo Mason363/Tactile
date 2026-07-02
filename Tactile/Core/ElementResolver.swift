@@ -59,6 +59,14 @@ final class ElementResolver {
     private var cachedFocusedWindow: AXUIElement?
     private var focusedWindowStamp: CFTimeInterval = 0
 
+    private var cachedFocusedMenu: AXUIElement?
+    private var focusedMenuStamp: CFTimeInterval = 0
+
+    /// Separate handle for focus queries: they run at most every 250ms, so
+    /// they can afford a longer timeout than per-sample hit-testing —
+    /// Chromium regularly needs more than 50ms to answer them.
+    private let focusQuery = AXUIElementCreateSystemWide()
+
     private static let axTimeout: Float = 0.05
 
     /// Hard ceiling on the speculative ancestor/descent search per hit-test.
@@ -72,6 +80,7 @@ final class ElementResolver {
 
     init() {
         AXUIElementSetMessagingTimeout(systemWide, Self.axTimeout)
+        AXUIElementSetMessagingTimeout(focusQuery, 0.25)
     }
 
     func resolve(at point: CGPoint) {
@@ -106,6 +115,22 @@ final class ElementResolver {
     // MARK: - AX queries (background queue only)
 
     private func hitTest(at point: CGPoint) -> ResolvedElement? {
+        // Web overlay popups (Chromium/Electron menus, selects) defeat the
+        // window-server hit-test: it frequently reports the elements *behind*
+        // the popup. While such a popup is open it holds accessibility focus,
+        // so when the cursor is inside the focused menu, resolve within it.
+        if let menu = focusedMenuContainer(), let menuFrame = frameAttribute(menu), menuFrame.contains(point) {
+            let deadline = CACurrentMediaTime() + 0.05
+            if let item = clickableDescendant(of: menu, containing: point, depth: 3, deadline: deadline, maxPerLevel: 48) {
+                return enrich(item)
+            }
+            // Over popup chrome between items: report the popup itself as
+            // inert so elements visually beneath it can't fire.
+            var chrome = makeResolved(menu)
+            chrome.actions = []
+            return chrome
+        }
+
         var elementRef: AXUIElement?
         let error = AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &elementRef)
         guard error == .success, let element = elementRef else { return nil }
@@ -259,10 +284,10 @@ final class ElementResolver {
         return (valuesRef as? [AXUIElement]) ?? []
     }
 
-    private func clickableDescendant(of element: AXUIElement, containing point: CGPoint, depth: Int, deadline: CFTimeInterval) -> ResolvedElement? {
+    private func clickableDescendant(of element: AXUIElement, containing point: CGPoint, depth: Int, deadline: CFTimeInterval, maxPerLevel: CFIndex = ElementResolver.maxChildrenPerLevel) -> ResolvedElement? {
         guard depth > 0, CACurrentMediaTime() < deadline else { return nil }
 
-        let children = boundedChildren(of: element, maxValues: Self.maxChildrenPerLevel)
+        let children = boundedChildren(of: element, maxValues: maxPerLevel)
         guard !children.isEmpty else { return nil }
 
         for child in children {
@@ -277,7 +302,7 @@ final class ElementResolver {
 
             // Only the child that contains the point is worth entering, so
             // this stays a narrow spatial path, not a tree walk.
-            if let deeper = clickableDescendant(of: child, containing: point, depth: depth - 1, deadline: deadline) {
+            if let deeper = clickableDescendant(of: child, containing: point, depth: depth - 1, deadline: deadline, maxPerLevel: maxPerLevel) {
                 return deeper
             }
         }
@@ -341,6 +366,51 @@ final class ElementResolver {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
         return (value as? NSNumber)?.intValue
+    }
+
+    /// The menu container holding accessibility focus, if any — an open
+    /// popup keeps focus on itself or one of its items (roving focus follows
+    /// the pointer). Cached briefly; returns nil when nothing menu-like is
+    /// focused, which is the overwhelmingly common case.
+    private func focusedMenuContainer() -> AXUIElement? {
+        let now = CACurrentMediaTime()
+        if now - focusedMenuStamp < 0.25 { return cachedFocusedMenu }
+        focusedMenuStamp = now
+        cachedFocusedMenu = nil
+
+        var focusedRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(focusQuery, "AXFocusedUIElement" as CFString, &focusedRef) == .success,
+              let value = focusedRef, CFGetTypeID(value) == AXUIElementGetTypeID()
+        else { return nil }
+        let focused = value as! AXUIElement
+        AXUIElementSetMessagingTimeout(focused, Self.axTimeout)
+
+        switch stringAttribute(focused, "AXRole") ?? "" {
+        case "AXMenu":
+            cachedFocusedMenu = focused
+        case "AXMenuItem", "AXMenuButton":
+            // Climb to the enclosing AXMenu — it spans the whole popup
+            // including header chrome. Fall back to the immediate parent.
+            var container = focused
+            var best: AXUIElement?
+            for _ in 0..<3 {
+                var parentRef: CFTypeRef?
+                guard AXUIElementCopyAttributeValue(container, "AXParent" as CFString, &parentRef) == .success,
+                      let parentValue = parentRef, CFGetTypeID(parentValue) == AXUIElementGetTypeID()
+                else { break }
+                container = parentValue as! AXUIElement
+                AXUIElementSetMessagingTimeout(container, Self.axTimeout)
+                if best == nil { best = container }
+                if stringAttribute(container, "AXRole") == "AXMenu" {
+                    best = container
+                    break
+                }
+            }
+            cachedFocusedMenu = best
+        default:
+            break
+        }
+        return cachedFocusedMenu
     }
 
     /// The window with system-wide keyboard focus, cached briefly since it
