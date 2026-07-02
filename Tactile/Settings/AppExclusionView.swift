@@ -10,10 +10,13 @@ import UniformTypeIdentifiers
 /// Manages the list of apps Tactile stays silent in.
 struct AppExclusionView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var controller: AppController
     @State private var selection: String?
 
     var body: some View {
         Form {
+            BrowserIntegrationSection()
+
             Section {
                 Text("Tactile won't give feedback while the cursor is over these apps. Useful for games, drawing canvases, or anything that gets noisy.")
                     .font(.callout)
@@ -92,6 +95,51 @@ struct AppExclusionView: View {
     private func add(_ bundleID: String) {
         guard !settings.excludedBundleIDs.contains(bundleID) else { return }
         settings.excludedBundleIDs.append(bundleID)
+    }
+}
+
+/// Chrome browser-integration controls: the toggle, the native-messaging host
+/// install status, and the steps to load the companion extension.
+private struct BrowserIntegrationSection: View {
+    @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var controller: AppController
+    @State private var statusTick = 0
+
+    var body: some View {
+        Section("Browser Integration") {
+            Toggle("Chrome browser integration", isOn: $settings.browserIntegrationEnabled)
+            Text("While Chrome is frontmost, Tactile feels clickable elements from the page's real structure — including custom buttons that never reach macOS accessibility. Everything else keeps using the accessibility engine. Requires the companion Chrome extension.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if settings.browserIntegrationEnabled {
+                LabeledContent("Messaging host") {
+                    if installed {
+                        Label("Installed", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else {
+                        Label("Not set up", systemImage: "exclamationmark.circle")
+                            .foregroundStyle(.orange)
+                    }
+                }
+
+                Button("Set Up / Re-install Host") {
+                    controller.reinstallBrowserBridge()
+                    statusTick += 1
+                }
+
+                Text("Then load the extension in Chrome: open chrome://extensions, enable Developer mode, choose “Load unpacked”, and select Tactile's extension folder. Expected extension ID: \(BridgeConstants.extensionID).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    /// Re-read whenever the setup button bumps the tick or the toggle flips.
+    private var installed: Bool {
+        _ = statusTick
+        return controller.browserBridgeInstalled
     }
 }
 

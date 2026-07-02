@@ -143,6 +143,14 @@ struct SettingsSnapshot: Codable {
     var categoryWaveforms: [String: HapticWaveform] = [:]
     var excludedBundleIDs: [String] = []
     var focusedWindowButtonsOnly = false
+    // Fields added after profiles first shipped are Optional so snapshots
+    // saved by older versions still decode; absent means the default.
+    var browserIntegrationEnabled: Bool? = false
+    var hoverCircleEnabled: Bool? = false
+    var hoverCircleDiameter: Double? = 22
+    var elementHighlightEnabled: Bool? = false
+    var clickableColorHex: String? = "#34C759"
+    var dangerColorHex: String? = "#FF3B30"
     var rateLimitMs: Double = 50
     var dwellMs: Double = 0
     var pollingHz: Double = 60
@@ -204,6 +212,36 @@ final class SettingsStore: ObservableObject {
     /// Quiet mode: only fire for buttons, and only in the focused window.
     @Published var focusedWindowButtonsOnly: Bool {
         didSet { defaults.set(focusedWindowButtonsOnly, forKey: "focusedWindowButtonsOnly") }
+    }
+
+    /// Chrome browser integration: while Chrome is frontmost and the cursor is
+    /// over web content, feedback comes from the companion extension's view of
+    /// the real DOM instead of the accessibility tree. Off until set up.
+    @Published var browserIntegrationEnabled: Bool {
+        didSet { defaults.set(browserIntegrationEnabled, forKey: "browserIntegrationEnabled") }
+    }
+
+    /// Visual aids: a colored circle riding under the cursor (green over
+    /// clickable, red over destructive) and an outline around the hovered
+    /// element, for finding both the cursor and its target by sight.
+    @Published var hoverCircleEnabled: Bool {
+        didSet { defaults.set(hoverCircleEnabled, forKey: "hoverCircleEnabled") }
+    }
+
+    @Published var hoverCircleDiameter: Double {
+        didSet { defaults.set(hoverCircleDiameter, forKey: "hoverCircleDiameter") }
+    }
+
+    @Published var elementHighlightEnabled: Bool {
+        didSet { defaults.set(elementHighlightEnabled, forKey: "elementHighlightEnabled") }
+    }
+
+    @Published var clickableColorHex: String {
+        didSet { defaults.set(clickableColorHex, forKey: "clickableColorHex") }
+    }
+
+    @Published var dangerColorHex: String {
+        didSet { defaults.set(dangerColorHex, forKey: "dangerColorHex") }
     }
 
     /// Minimum time between haptic events, in milliseconds. 0 disables.
@@ -327,6 +365,12 @@ final class SettingsStore: ObservableObject {
 
         excludedBundleIDs = defaults.stringArray(forKey: "excludedBundleIDs") ?? []
         focusedWindowButtonsOnly = defaults.object(forKey: "focusedWindowButtonsOnly") as? Bool ?? false
+        browserIntegrationEnabled = defaults.object(forKey: "browserIntegrationEnabled") as? Bool ?? false
+        hoverCircleEnabled = defaults.object(forKey: "hoverCircleEnabled") as? Bool ?? false
+        hoverCircleDiameter = defaults.object(forKey: "hoverCircleDiameter") as? Double ?? 22
+        elementHighlightEnabled = defaults.object(forKey: "elementHighlightEnabled") as? Bool ?? false
+        clickableColorHex = defaults.string(forKey: "clickableColorHex") ?? "#34C759"
+        dangerColorHex = defaults.string(forKey: "dangerColorHex") ?? "#FF3B30"
         rateLimitMs = defaults.object(forKey: "rateLimitMs") as? Double ?? 50
         dwellMs = defaults.object(forKey: "dwellMs") as? Double ?? 0
         hapticOnExit = defaults.object(forKey: "hapticOnExit") as? Bool ?? false
@@ -390,6 +434,12 @@ final class SettingsStore: ObservableObject {
         snapshot.categoryWaveforms = Dictionary(uniqueKeysWithValues: categoryWaveforms.map { ($0.key.rawValue, $0.value) })
         snapshot.excludedBundleIDs = excludedBundleIDs
         snapshot.focusedWindowButtonsOnly = focusedWindowButtonsOnly
+        snapshot.browserIntegrationEnabled = browserIntegrationEnabled
+        snapshot.hoverCircleEnabled = hoverCircleEnabled
+        snapshot.hoverCircleDiameter = hoverCircleDiameter
+        snapshot.elementHighlightEnabled = elementHighlightEnabled
+        snapshot.clickableColorHex = clickableColorHex
+        snapshot.dangerColorHex = dangerColorHex
         snapshot.rateLimitMs = rateLimitMs
         snapshot.dwellMs = dwellMs
         snapshot.pollingHz = pollingHz
@@ -427,6 +477,12 @@ final class SettingsStore: ObservableObject {
         categoryWaveforms = waveforms
         excludedBundleIDs = snapshot.excludedBundleIDs
         focusedWindowButtonsOnly = snapshot.focusedWindowButtonsOnly
+        browserIntegrationEnabled = snapshot.browserIntegrationEnabled ?? false
+        hoverCircleEnabled = snapshot.hoverCircleEnabled ?? false
+        hoverCircleDiameter = snapshot.hoverCircleDiameter ?? 22
+        elementHighlightEnabled = snapshot.elementHighlightEnabled ?? false
+        clickableColorHex = snapshot.clickableColorHex ?? "#34C759"
+        dangerColorHex = snapshot.dangerColorHex ?? "#FF3B30"
         rateLimitMs = snapshot.rateLimitMs
         dwellMs = snapshot.dwellMs
         pollingHz = snapshot.pollingHz

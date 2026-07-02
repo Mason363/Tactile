@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     var body: some View {
@@ -133,6 +134,31 @@ struct GeneralSettingsView: View {
                 )
             }
 
+            Section("Visual Aids") {
+                Toggle("Colored circle under the cursor", isOn: $settings.hoverCircleEnabled)
+                Text("A small circle rides with the cursor and changes color with what's underneath: your clickable color over interactive elements, your danger color over destructive ones, dim gray over disabled controls.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                LabeledSlider(
+                    title: "Circle size",
+                    value: $settings.hoverCircleDiameter,
+                    range: 12...44,
+                    step: 2,
+                    format: { "\(Int($0)) pt" },
+                    caption: nil
+                )
+                .disabled(!settings.hoverCircleEnabled)
+
+                Toggle("Highlight the hovered element", isOn: $settings.elementHighlightEnabled)
+                Text("Draws an outline around the clickable element under the cursor, so its whole area is visible at a glance.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                ColorPicker("Clickable color", selection: colorBinding(\.clickableColorHex, fallback: .systemGreen))
+                ColorPicker("Danger color", selection: colorBinding(\.dangerColorHex, fallback: .systemRed))
+            }
+
             Section {
                 if permission.isTrusted {
                     Label("Accessibility access granted", systemImage: "checkmark.circle.fill")
@@ -147,6 +173,14 @@ struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// Bridges a stored hex string to the SwiftUI color picker.
+    private func colorBinding(_ keyPath: ReferenceWritableKeyPath<SettingsStore, String>, fallback: NSColor) -> Binding<Color> {
+        Binding(
+            get: { Color(nsColor: NSColor(hexString: settings[keyPath: keyPath]) ?? fallback) },
+            set: { settings[keyPath: keyPath] = NSColor($0).hexString }
+        )
     }
 }
 
@@ -194,10 +228,12 @@ struct TriggerSettingsView: View {
                 LabeledSlider(
                     title: "Vibration speed",
                     value: $settings.vibrateRateMs,
-                    range: 30...150,
-                    step: 10,
+                    range: settings.useEnhancedHaptics ? 4...150 : 30...150,
+                    step: 2,
                     format: { "\(Int((1000 / $0).rounded())) pulses/sec" },
-                    caption: nil
+                    caption: settings.useEnhancedHaptics
+                        ? "With enhanced haptics the pulses run on a dedicated thread — past roughly 100 pulses/sec they blur into one continuous vibration."
+                        : "Turn on enhanced haptics (General tab) to unlock much higher speeds that feel like a true vibration."
                 )
                 .disabled(!settings.vibrateOnHover)
             }
@@ -252,6 +288,8 @@ private struct CategoryRow: View {
 
 struct SoundSettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @State private var customSounds = AudioFeedbackEngine.customSounds()
+    @State private var importError: String?
 
     var body: some View {
         Form {
@@ -267,8 +305,36 @@ struct SoundSettingsView: View {
                     ForEach(AudioFeedbackEngine.availableSounds, id: \.self) { name in
                         Text(name).tag(name)
                     }
+                    if !customSounds.isEmpty {
+                        Divider()
+                        ForEach(customSounds, id: \.self) { identifier in
+                            Text(AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
+                        }
+                    }
                 }
                 .disabled(!settings.audioEnabled)
+
+                HStack {
+                    Button("Import Sound…") {
+                        importSound()
+                    }
+                    if AudioFeedbackEngine.customFilename(from: settings.audioSoundName) != nil {
+                        Button("Remove This Sound") {
+                            AudioFeedbackEngine.removeSound(settings.audioSoundName)
+                            settings.audioSoundName = AudioFeedbackEngine.availableSounds[0]
+                            customSounds = AudioFeedbackEngine.customSounds()
+                        }
+                    }
+                }
+                if let importError {
+                    Text(importError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                } else {
+                    Text("Short sounds work best — a click, a tick, a soft pop. Any audio format macOS can play (AIFF, WAV, MP3, M4A…).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 LabeledSlider(
                     title: "Click volume",
@@ -290,6 +356,28 @@ struct SoundSettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func importSound() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.audio]
+        panel.allowsMultipleSelection = true
+        panel.message = "Choose short audio files to use as hover clicks"
+        guard panel.runModal() == .OK else { return }
+        var lastImported: String?
+        var failed: [String] = []
+        for url in panel.urls {
+            if let identifier = AudioFeedbackEngine.importSound(from: url) {
+                lastImported = identifier
+            } else {
+                failed.append(url.lastPathComponent)
+            }
+        }
+        customSounds = AudioFeedbackEngine.customSounds()
+        if let lastImported {
+            settings.audioSoundName = lastImported
+        }
+        importError = failed.isEmpty ? nil : "Couldn't play \(failed.joined(separator: ", ")) — not imported."
     }
 }
 

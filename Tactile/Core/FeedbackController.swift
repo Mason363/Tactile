@@ -23,6 +23,11 @@ final class FeedbackController {
     /// Feeds the cursor monitor's skip region after each resolution.
     var onSkipRegionUpdate: ((CGRect?) -> Void)?
 
+    /// Tells the visual hover indicator what the cursor is over (and where,
+    /// in accessibility coordinates). Only called when the hovered element
+    /// actually changes.
+    var onHoverState: ((HoverKind, CGRect?) -> Void)?
+
     private let haptics = SystemHapticEngine()
     private let audio = AudioFeedbackEngine()
     private let player = WaveformPlayer()
@@ -31,10 +36,19 @@ final class FeedbackController {
     private var lastWindow: AXUIElement?
     /// Set when the current element fired, so hover-out knows to play.
     private var firedForCurrentElement = false
+    /// Frame and app of the control that last fired, kept while the cursor
+    /// stays inside it. Web apps re-render controls on hover (ripple and
+    /// shadow wrappers), minting new accessibility nodes for the same visual
+    /// control — so element identity churns under a resting cursor. Anything
+    /// resolved inside this region that nests with it is still the same
+    /// control: no re-fire, no hover-out.
+    private var activeFireRegion: (frame: CGRect, pid: pid_t)?
     private var lastTickTime: CFTimeInterval = 0
     private var dwellTimer: Timer?
     private var vibrateTimer: Timer?
     private var vibrateStep = 0
+    /// True while the actuator's continuous buzz thread is running.
+    private var buzzing = false
 
     /// Enhanced haptics when enabled and supported, public engine otherwise.
     private var hapticEngine: FeedbackEngine {
@@ -51,8 +65,17 @@ final class FeedbackController {
     }
 
     func handle(point: CGPoint, resolved: ResolvedElement?) {
+        if let region = activeFireRegion, !region.frame.insetBy(dx: -2, dy: -2).contains(point) {
+            activeFireRegion = nil
+        }
+
         guard let resolved else {
+            // A transient hit-test failure while still inside the fired
+            // control (common while web apps re-render on hover) is not an
+            // exit — keep the current feel.
+            if activeFireRegion != nil { return }
             onSkipRegionUpdate?(Self.jitterBox(around: point))
+            onHoverState?(.none, nil)
             leaveCurrentElement(enteringFiringElement: false)
             lastElement = nil
             return
@@ -91,6 +114,22 @@ final class FeedbackController {
         // feedback fire on enter (and exit) only.
         if let lastElement, CFEqual(lastElement, resolved.element) { return }
 
+        // Still inside the frame that fired, and the new element nests with
+        // it (its own label, an inert overlay, a re-rendered wrapper, or a
+        // container spanning it): same logical control, stay quiet.
+        if let region = activeFireRegion, resolved.pid == region.pid {
+            let grown = region.frame.insetBy(dx: -2, dy: -2)
+            let nests = resolved.frame.map { frame in
+                grown.contains(frame) || frame.insetBy(dx: -2, dy: -2).contains(region.frame)
+            } ?? true
+            if nests {
+                lastElement = resolved.element
+                return
+            }
+        }
+
+        emitHoverState(category: category, resolved: resolved)
+
         let firesOnEnter = category.map { willFire($0, resolved: resolved) } ?? false
         leaveCurrentElement(enteringFiringElement: firesOnEnter)
         lastElement = resolved.element
@@ -101,7 +140,7 @@ final class FeedbackController {
         // so you can feel that something is there but inactive.
         if !resolved.enabled {
             if config.feelDisabled, config.enabledCategories.contains(category), passesFocusFilter(category, resolved) {
-                play(.single(.alignment))
+                play(.single(.alignment), reason: "disabled")
             }
             return
         }
@@ -109,6 +148,69 @@ final class FeedbackController {
         guard firesOnEnter else { return }
 
         let waveform = styledWaveform(for: category, resolved: resolved)
+        let firedRegion = resolved.frame.map { (frame: $0, pid: resolved.pid) }
+        if config.dwellDelay > 0 {
+            dwellTimer = Timer.scheduledTimer(withTimeInterval: config.dwellDelay, repeats: false) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.play(waveform)
+                    self.firedForCurrentElement = true
+                    self.activeFireRegion = firedRegion
+                    self.startVibrationIfEnabled()
+                }
+            }
+        } else {
+            play(waveform)
+            firedForCurrentElement = true
+            activeFireRegion = firedRegion
+            startVibrationIfEnabled()
+        }
+    }
+
+    // MARK: - Browser bridge
+
+    /// Feedback driven by the Chrome extension instead of the accessibility
+    /// tree. The extension reports the real DOM, so it reaches `<div>` controls
+    /// AX never sees, and it already emits one event per element enter — so
+    /// this reuses the same waveform selection, playback, vibration, and
+    /// hover-out as the AX path, just fed from semantics rather than an
+    /// `AXUIElement`. AppController suppresses the AX path while this is hot, so
+    /// the two never both fire.
+    func handleBridge(_ message: BridgeMessage) {
+        guard message.type == "hover",
+              let raw = message.el,
+              let category = FeedbackCategory(rawValue: raw)
+        else {
+            // "leave" (or a malformed hover): end the current element, playing
+            // the hover-out waveform if one fired.
+            onHoverState?(.none, nil)
+            leaveCurrentElement(enteringFiringElement: false)
+            lastElement = nil
+            return
+        }
+
+        let enabled = message.enabled ?? true
+        let passes = config.enabledCategories.contains(category) && bridgeFocusOK(category)
+        leaveCurrentElement(enteringFiringElement: enabled && passes)
+        lastElement = nil
+
+        // The extension doesn't report frames, so the element outline can't
+        // follow it — but the cursor circle's color still can.
+        if passes {
+            let kind: HoverKind = !enabled ? .disabled : ((message.danger ?? false) ? .danger : .clickable)
+            onHoverState?(kind, nil)
+        } else {
+            onHoverState?(.none, nil)
+        }
+
+        guard passes else { return }
+
+        if !enabled {
+            if config.feelDisabled { play(.single(.alignment), reason: "disabled") }
+            return
+        }
+
+        let waveform = bridgeWaveform(category: category, isOn: message.on, isDanger: message.danger ?? false)
         if config.dwellDelay > 0 {
             dwellTimer = Timer.scheduledTimer(withTimeInterval: config.dwellDelay, repeats: false) { [weak self] _ in
                 Task { @MainActor [weak self] in
@@ -119,16 +221,36 @@ final class FeedbackController {
                 }
             }
         } else {
-            play(waveform)
+            play(waveform, reason: "bridge")
             firedForCurrentElement = true
             startVibrationIfEnabled()
         }
     }
 
+    /// Danger and checked-state styling for a bridge element, mirroring
+    /// `styledWaveform` but from the extension's precomputed flags.
+    private func bridgeWaveform(category: FeedbackCategory, isOn: Bool?, isDanger: Bool) -> HapticWaveform {
+        if config.dangerEnabled, isDanger { return config.dangerWaveform }
+        var waveform = config.waveforms[category] ?? .single(category.defaultPattern)
+        if config.stateAware, isOn == true, var last = waveform.steps.last {
+            last.gapMs = max(last.gapMs, 110)
+            waveform.steps[waveform.steps.count - 1] = last
+            waveform.steps.append(WaveformStep(strength: .alignment, gapMs: 0))
+        }
+        return waveform
+    }
+
+    /// The focused-window quiet mode, applied to web content: the page is the
+    /// frontmost window's content, so only the button restriction is meaningful.
+    private func bridgeFocusOK(_ category: FeedbackCategory) -> Bool {
+        guard config.focusedWindowButtonsOnly else { return true }
+        return category == .button
+    }
+
     /// Called by the pipeline when the cursor touches an outer screen edge.
     func screenEdgeBump() {
         guard config.screenEdgesEnabled else { return }
-        play(config.edgeWaveform)
+        play(config.edgeWaveform, reason: "edge")
     }
 
     /// Forgets the current element so re-entering it ticks again.
@@ -136,6 +258,7 @@ final class FeedbackController {
         lastElement = nil
         lastWindow = nil
         firedForCurrentElement = false
+        activeFireRegion = nil
         dwellTimer?.invalidate()
         dwellTimer = nil
         stopVibration()
@@ -158,6 +281,25 @@ final class FeedbackController {
             waveform.steps.append(WaveformStep(strength: .alignment, gapMs: 0))
         }
         return waveform
+    }
+
+    /// Reduces a resolution to what the visual indicator shows: nothing,
+    /// clickable, destructive, or disabled.
+    private func emitHoverState(category: FeedbackCategory?, resolved: ResolvedElement) {
+        guard let onHoverState else { return }
+        guard let category, config.enabledCategories.contains(category) else {
+            onHoverState(.none, nil)
+            return
+        }
+        let kind: HoverKind
+        if !resolved.enabled {
+            kind = .disabled
+        } else if ContextDetector.isDanger(title: resolved.title, subrole: resolved.subrole) {
+            kind = .danger
+        } else {
+            kind = .clickable
+        }
+        onHoverState(kind, resolved.frame)
     }
 
     private func willFire(_ category: FeedbackCategory, resolved: ResolvedElement) -> Bool {
@@ -188,7 +330,7 @@ final class FeedbackController {
         dwellTimer = nil
         stopVibration()
         if config.hapticOnExit, !enteringFiringElement, firedForCurrentElement {
-            play(config.exitWaveform)
+            play(config.exitWaveform, reason: "exit")
         }
         firedForCurrentElement = false
     }
@@ -198,15 +340,16 @@ final class FeedbackController {
         guard config.windowBoundsEnabled else { return }
         defer { if resolved.window != nil { lastWindow = resolved.window } }
         guard let window = resolved.window, let lastWindow, !CFEqual(lastWindow, window) else { return }
-        play(config.boundaryWaveform)
+        play(config.boundaryWaveform, reason: "boundary")
     }
 
     // MARK: - Playback
 
-    private func play(_ waveform: HapticWaveform) {
+    private func play(_ waveform: HapticWaveform, reason: StaticString = "enter") {
         let now = CACurrentMediaTime()
         guard config.rateLimitInterval == 0 || now - lastTickTime >= config.rateLimitInterval else { return }
         lastTickTime = now
+        log.debug("fire reason=\(reason, privacy: .public) steps=\(waveform.steps.count, privacy: .public)")
 
         player.play(waveform, on: hapticEngine)
         if config.audioEnabled {
@@ -225,6 +368,15 @@ final class FeedbackController {
     private func startVibrationIfEnabled() {
         guard config.vibrateOnHover else { return }
         stopVibration()
+        // With the actuator available, the buzz runs on its own thread — the
+        // only way to hold pulse rates high enough (up to 250/sec) to feel
+        // like one continuous vibration instead of a series of taps.
+        if config.useEnhancedHaptics, let actuator = ActuatorHapticEngine.shared {
+            let gaps = config.vibrationMode.gaps(base: max(config.vibrateInterval, 0.004))
+            actuator.startBuzz(config.vibratePattern, gaps: gaps)
+            buzzing = true
+            return
+        }
         scheduleNextVibratePulse()
     }
 
@@ -246,6 +398,10 @@ final class FeedbackController {
     }
 
     private func stopVibration() {
+        if buzzing {
+            ActuatorHapticEngine.shared?.stopBuzz()
+            buzzing = false
+        }
         vibrateTimer?.invalidate()
         vibrateTimer = nil
         vibrateStep = 0
