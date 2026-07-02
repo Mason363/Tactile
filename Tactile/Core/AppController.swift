@@ -99,6 +99,7 @@ final class AppController: ObservableObject {
 
     private func pushConfig() {
         feedback.config = settings.makeConfig()
+        cursorMonitor.sampleInterval = 1.0 / max(settings.pollingHz, 1)
     }
 
     private func startPipeline() {

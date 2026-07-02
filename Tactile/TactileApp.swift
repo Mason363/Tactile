@@ -21,13 +21,6 @@ struct TactileApp: App {
                 .accessibilityLabel("Tactile")
         }
         .menuBarExtraStyle(.menu)
-
-        Settings {
-            SettingsView()
-                .environmentObject(controller)
-                .environmentObject(controller.settings)
-                .environmentObject(controller.permission)
-        }
     }
 }
 

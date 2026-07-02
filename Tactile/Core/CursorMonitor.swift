@@ -10,9 +10,11 @@ import QuartzCore
 /// resolving. Everything downstream is driven from here — when the mouse is
 /// still, nothing in the app runs.
 ///
-/// Three gates keep the accessibility queries rare:
-/// 1. A time throttle caps sampling at ~25 Hz.
-/// 2. A distance gate ignores sub-5px jitters.
+/// Three gates keep the accessibility queries rare without adding felt lag:
+/// 1. A time throttle caps sampling at the configured polling rate, with a
+///    trailing-edge sample so the cursor's final resting position is always
+///    resolved even when the last mouse event fell inside the throttle window.
+/// 2. A small distance gate ignores sub-pixel jitter.
 /// 3. A skip region — the frame of the last resolved element — short-circuits
 ///    sampling entirely while the cursor stays inside the same element.
 ///
@@ -23,6 +25,10 @@ final class CursorMonitor {
     /// coordinates.
     var onSample: ((CGPoint) -> Void)?
 
+    /// Minimum time between samples. Settable while running; new value
+    /// applies from the next event.
+    var sampleInterval: CFTimeInterval = 1.0 / 60.0
+
     /// While the cursor stays inside this rect no new samples are emitted.
     /// Set by the pipeline after each resolution.
     var skipRegion: CGRect?
@@ -30,12 +36,12 @@ final class CursorMonitor {
     private var globalMoveMonitor: Any?
     private var localMoveMonitor: Any?
     private var globalScrollMonitor: Any?
+    private var trailingTimer: Timer?
 
     private var lastSampleTime: CFTimeInterval = 0
     private var lastPoint: CGPoint?
 
-    private let minInterval: CFTimeInterval = 0.04
-    private let minDistance: CGFloat = 5
+    private let minDistance: CGFloat = 2
 
     var isRunning: Bool { globalMoveMonitor != nil }
 
@@ -62,6 +68,7 @@ final class CursorMonitor {
         globalMoveMonitor = nil
         localMoveMonitor = nil
         globalScrollMonitor = nil
+        cancelTrailingSample()
         skipRegion = nil
         lastPoint = nil
         lastSampleTime = 0
@@ -69,7 +76,23 @@ final class CursorMonitor {
 
     private func handleMove() {
         let now = CACurrentMediaTime()
-        guard now - lastSampleTime >= minInterval else { return }
+        let elapsed = now - lastSampleTime
+        if elapsed < sampleInterval {
+            // Throttled — but if this turns out to be the last event of the
+            // gesture, the resting position still needs to be resolved.
+            scheduleTrailingSample(after: sampleInterval - elapsed)
+            return
+        }
+        sample(now: now)
+    }
+
+    private func handleScroll() {
+        skipRegion = nil
+        handleMove()
+    }
+
+    private func sample(now: CFTimeInterval) {
+        cancelTrailingSample()
         guard let point = currentPoint() else { return }
 
         if let lastPoint, hypot(point.x - lastPoint.x, point.y - lastPoint.y) < minDistance {
@@ -85,14 +108,22 @@ final class CursorMonitor {
         onSample?(point)
     }
 
-    private func handleScroll() {
-        skipRegion = nil
-        let now = CACurrentMediaTime()
-        guard now - lastSampleTime >= minInterval else { return }
-        guard let point = currentPoint() else { return }
-        lastSampleTime = now
-        lastPoint = point
-        onSample?(point)
+    private func scheduleTrailingSample(after delay: TimeInterval) {
+        guard trailingTimer == nil else { return }
+        let timer = Timer(timeInterval: max(delay, 0.005), repeats: false) { [weak self] _ in
+            guard let self else { return }
+            self.trailingTimer = nil
+            self.sample(now: CACurrentMediaTime())
+        }
+        // .common keeps the trailing sample firing during menu and drag
+        // tracking, when the default run loop mode is suspended.
+        RunLoop.main.add(timer, forMode: .common)
+        trailingTimer = timer
+    }
+
+    private func cancelTrailingSample() {
+        trailingTimer?.invalidate()
+        trailingTimer = nil
     }
 
     /// Current cursor position in global top-left coordinates — the space

@@ -26,7 +26,7 @@ enum ClickabilityClassifier {
         }
 
         switch role {
-        case "AXButton":
+        case "AXButton", "AXDockItem":
             return .button
         case "AXLink":
             return .link

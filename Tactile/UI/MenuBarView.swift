@@ -34,8 +34,8 @@ struct MenuBarView: View {
 
         Divider()
 
-        SettingsLink {
-            Text("Settings…")
+        Button("Settings…") {
+            SettingsWindow.show(controller: controller)
         }
         .keyboardShortcut(",")
 

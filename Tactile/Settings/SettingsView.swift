@@ -17,7 +17,33 @@ struct SettingsView: View {
             SoundSettingsView()
                 .tabItem { Label("Sound", systemImage: "speaker.wave.2") }
         }
-        .frame(width: 480)
+        .frame(width: 480, height: 560)
+    }
+}
+
+/// Hosts the settings in a window Tactile manages itself. SwiftUI's
+/// `Settings` scene is unreliable from a MenuBarExtra in an LSUIElement app,
+/// so this guarantees the window actually opens and comes to the front.
+@MainActor
+enum SettingsWindow {
+    private static var window: NSWindow?
+
+    static func show(controller: AppController) {
+        if window == nil {
+            let view = SettingsView()
+                .environmentObject(controller)
+                .environmentObject(controller.settings)
+                .environmentObject(controller.permission)
+            let hosting = NSHostingController(rootView: view)
+            let newWindow = NSWindow(contentViewController: hosting)
+            newWindow.title = "Tactile Settings"
+            newWindow.styleMask = [.titled, .closable, .miniaturizable]
+            newWindow.isReleasedWhenClosed = false
+            newWindow.center()
+            window = newWindow
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
     }
 }
 
@@ -57,10 +83,19 @@ struct GeneralSettingsView: View {
                 LabeledSlider(
                     title: "Minimum time between taps",
                     value: $settings.rateLimitMs,
-                    range: 50...500,
+                    range: 0...500,
                     step: 25,
-                    format: { "\(Int($0)) ms" },
-                    caption: "Raise this if sweeping across toolbars feels too busy."
+                    format: { $0 == 0 ? "Off" : "\(Int($0)) ms" },
+                    caption: "Raise this if sweeping across toolbars feels too busy; lower it (or turn it off) for faster back-to-back taps."
+                )
+
+                LabeledSlider(
+                    title: "Polling rate",
+                    value: $settings.pollingHz,
+                    range: 30...120,
+                    step: 10,
+                    format: { "\(Int($0)) Hz" },
+                    caption: "How often the cursor is checked while moving. Higher feels more immediate during fast sweeps; lower uses slightly less CPU."
                 )
 
                 LabeledSlider(
@@ -100,6 +135,13 @@ struct TriggerSettingsView: View {
             Section {
                 Text("Choose which elements tap the trackpad when the cursor passes over them, and how each one feels.")
                     .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Also tap when leaving an element", isOn: $settings.hapticOnExit)
+                Text("Marks both edges of a control — one tap entering, one leaving — so you can feel its extent. Moving directly from one control to the next still taps only once.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
 

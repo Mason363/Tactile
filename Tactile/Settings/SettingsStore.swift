@@ -85,6 +85,7 @@ struct FeedbackConfig {
     var excludedBundleIDs: Set<String>
     var rateLimitInterval: TimeInterval
     var dwellDelay: TimeInterval
+    var hapticOnExit: Bool
     var audioEnabled: Bool
     var audioVolume: Double
 }
@@ -128,6 +129,16 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(dwellMs, forKey: "dwellMs") }
     }
 
+    /// Also tick when the cursor leaves an element it ticked for.
+    @Published var hapticOnExit: Bool {
+        didSet { defaults.set(hapticOnExit, forKey: "hapticOnExit") }
+    }
+
+    /// How often the cursor position is checked while moving, in hertz.
+    @Published var pollingHz: Double {
+        didSet { defaults.set(pollingHz, forKey: "pollingHz") }
+    }
+
     @Published var audioEnabled: Bool {
         didSet { defaults.set(audioEnabled, forKey: "audioEnabled") }
     }
@@ -152,8 +163,10 @@ final class SettingsStore: ObservableObject {
         categoryPattern = patterns
 
         excludedBundleIDs = defaults.stringArray(forKey: "excludedBundleIDs") ?? []
-        rateLimitMs = defaults.object(forKey: "rateLimitMs") as? Double ?? 100
+        rateLimitMs = defaults.object(forKey: "rateLimitMs") as? Double ?? 50
         dwellMs = defaults.object(forKey: "dwellMs") as? Double ?? 0
+        hapticOnExit = defaults.object(forKey: "hapticOnExit") as? Bool ?? false
+        pollingHz = defaults.object(forKey: "pollingHz") as? Double ?? 60
         audioEnabled = defaults.object(forKey: "audioEnabled") as? Bool ?? false
         audioVolume = defaults.object(forKey: "audioVolume") as? Double ?? 0.5
     }
@@ -165,6 +178,7 @@ final class SettingsStore: ObservableObject {
             excludedBundleIDs: Set(excludedBundleIDs),
             rateLimitInterval: rateLimitMs / 1000,
             dwellDelay: dwellMs / 1000,
+            hapticOnExit: hapticOnExit,
             audioEnabled: audioEnabled,
             audioVolume: audioVolume
         )

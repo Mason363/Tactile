@@ -11,7 +11,9 @@ import QuartzCore
 ///
 /// Feedback fires once per element *enter* — never continuously — and only
 /// when the element's category is enabled, its app isn't excluded, the rate
-/// limit allows it, and any dwell delay has elapsed.
+/// limit allows it, and any dwell delay has elapsed. Optionally, leaving an
+/// element that ticked also ticks, unless the cursor moved straight onto
+/// another ticking element (then the enter tick alone marks the transition).
 @MainActor
 final class FeedbackController {
     var config: FeedbackConfig
@@ -23,6 +25,9 @@ final class FeedbackController {
     private let audio = AudioFeedbackEngine()
 
     private var lastElement: AXUIElement?
+    /// Category the current element ticked with, if it did — the exit tick
+    /// reuses it so hover-out feels consistent with hover-in.
+    private var firedCategory: FeedbackCategory?
     private var lastTickTime: CFTimeInterval = 0
     private var dwellTimer: Timer?
 
@@ -35,7 +40,8 @@ final class FeedbackController {
     func handle(point: CGPoint, resolved: ResolvedElement?) {
         guard let resolved else {
             onSkipRegionUpdate?(Self.jitterBox(around: point))
-            enterElement(nil)
+            leaveCurrentElement(enteringFiringElement: false)
+            lastElement = nil
             return
         }
 
@@ -59,34 +65,53 @@ final class FeedbackController {
         }
 
         // Same element as last time — nothing to do. This is what makes
-        // feedback fire on enter only.
+        // feedback fire on enter (and exit) only.
         if let lastElement, CFEqual(lastElement, resolved.element) { return }
-        enterElement(resolved.element)
 
-        guard let category,
-              resolved.enabled,
-              config.enabledCategories.contains(category),
-              !isExcluded(resolved.bundleID)
-        else { return }
+        let firesOnEnter = category.map { willFire($0, resolved: resolved) } ?? false
+        leaveCurrentElement(enteringFiringElement: firesOnEnter)
+        lastElement = resolved.element
+
+        guard firesOnEnter, let category else { return }
 
         if config.dwellDelay > 0 {
             dwellTimer = Timer.scheduledTimer(withTimeInterval: config.dwellDelay, repeats: false) { [weak self] _ in
-                Task { @MainActor [weak self] in self?.fire(category) }
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.fire(category)
+                    self.firedCategory = category
+                }
             }
         } else {
             fire(category)
+            firedCategory = category
         }
     }
 
     /// Forgets the current element so re-entering it ticks again.
     func reset() {
-        enterElement(nil)
-    }
-
-    private func enterElement(_ element: AXUIElement?) {
-        lastElement = element
+        lastElement = nil
+        firedCategory = nil
         dwellTimer?.invalidate()
         dwellTimer = nil
+    }
+
+    private func willFire(_ category: FeedbackCategory, resolved: ResolvedElement) -> Bool {
+        resolved.enabled
+            && config.enabledCategories.contains(category)
+            && !isExcluded(resolved.bundleID)
+    }
+
+    /// Ends the current element, firing the hover-out tick when configured.
+    /// The exit tick is skipped when the cursor lands directly on another
+    /// ticking element — one transition, one tick.
+    private func leaveCurrentElement(enteringFiringElement: Bool) {
+        dwellTimer?.invalidate()
+        dwellTimer = nil
+        if config.hapticOnExit, !enteringFiringElement, let firedCategory {
+            fire(firedCategory)
+        }
+        firedCategory = nil
     }
 
     private func isExcluded(_ bundleID: String?) -> Bool {
@@ -110,6 +135,6 @@ final class FeedbackController {
     /// Minimal hysteresis for positions that didn't resolve to a clickable
     /// element — absorbs jitter without hiding nearby controls.
     private static func jitterBox(around point: CGPoint) -> CGRect {
-        CGRect(x: point.x - 8, y: point.y - 8, width: 16, height: 16)
+        CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)
     }
 }
