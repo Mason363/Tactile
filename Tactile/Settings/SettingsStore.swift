@@ -86,6 +86,8 @@ struct FeedbackConfig {
     var rateLimitInterval: TimeInterval
     var dwellDelay: TimeInterval
     var hapticOnExit: Bool
+    var vibrateOnHover: Bool
+    var vibrateInterval: TimeInterval
     var audioEnabled: Bool
     var audioVolume: Double
 }
@@ -134,6 +136,22 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(hapticOnExit, forKey: "hapticOnExit") }
     }
 
+    /// Keep pulsing the trackpad for as long as the cursor rests on a
+    /// clickable element.
+    @Published var vibrateOnHover: Bool {
+        didSet { defaults.set(vibrateOnHover, forKey: "vibrateOnHover") }
+    }
+
+    /// Time between vibration pulses, in milliseconds.
+    @Published var vibrateRateMs: Double {
+        didSet { defaults.set(vibrateRateMs, forKey: "vibrateRateMs") }
+    }
+
+    /// Bypass the polling rate and check the cursor on every mouse event.
+    @Published var noLagMode: Bool {
+        didSet { defaults.set(noLagMode, forKey: "noLagMode") }
+    }
+
     /// How often the cursor position is checked while moving, in hertz.
     @Published var pollingHz: Double {
         didSet { defaults.set(pollingHz, forKey: "pollingHz") }
@@ -166,6 +184,9 @@ final class SettingsStore: ObservableObject {
         rateLimitMs = defaults.object(forKey: "rateLimitMs") as? Double ?? 50
         dwellMs = defaults.object(forKey: "dwellMs") as? Double ?? 0
         hapticOnExit = defaults.object(forKey: "hapticOnExit") as? Bool ?? false
+        vibrateOnHover = defaults.object(forKey: "vibrateOnHover") as? Bool ?? false
+        vibrateRateMs = defaults.object(forKey: "vibrateRateMs") as? Double ?? 50
+        noLagMode = defaults.object(forKey: "noLagMode") as? Bool ?? false
         pollingHz = defaults.object(forKey: "pollingHz") as? Double ?? 60
         audioEnabled = defaults.object(forKey: "audioEnabled") as? Bool ?? false
         audioVolume = defaults.object(forKey: "audioVolume") as? Double ?? 0.5
@@ -179,6 +200,8 @@ final class SettingsStore: ObservableObject {
             rateLimitInterval: rateLimitMs / 1000,
             dwellDelay: dwellMs / 1000,
             hapticOnExit: hapticOnExit,
+            vibrateOnHover: vibrateOnHover,
+            vibrateInterval: vibrateRateMs / 1000,
             audioEnabled: audioEnabled,
             audioVolume: audioVolume
         )

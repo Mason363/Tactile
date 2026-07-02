@@ -30,6 +30,7 @@ final class FeedbackController {
     private var firedCategory: FeedbackCategory?
     private var lastTickTime: CFTimeInterval = 0
     private var dwellTimer: Timer?
+    private var vibrateTimer: Timer?
 
     private let log = Logger(subsystem: "com.masonchen.Tactile", category: "feedback")
 
@@ -80,11 +81,13 @@ final class FeedbackController {
                     guard let self else { return }
                     self.fire(category)
                     self.firedCategory = category
+                    self.startVibrationIfEnabled(category)
                 }
             }
         } else {
             fire(category)
             firedCategory = category
+            startVibrationIfEnabled(category)
         }
     }
 
@@ -94,6 +97,7 @@ final class FeedbackController {
         firedCategory = nil
         dwellTimer?.invalidate()
         dwellTimer = nil
+        stopVibration()
     }
 
     private func willFire(_ category: FeedbackCategory, resolved: ResolvedElement) -> Bool {
@@ -108,10 +112,34 @@ final class FeedbackController {
     private func leaveCurrentElement(enteringFiringElement: Bool) {
         dwellTimer?.invalidate()
         dwellTimer = nil
+        stopVibration()
         if config.hapticOnExit, !enteringFiringElement, let firedCategory {
             fire(firedCategory)
         }
         firedCategory = nil
+    }
+
+    // MARK: - Hover vibration
+
+    /// A stream of rapid pulses reads as a continuous buzz. Pulses go
+    /// straight to the actuator — the rate limit governs discrete ticks,
+    /// and the click sound stays out of it entirely.
+    private func startVibrationIfEnabled(_ category: FeedbackCategory) {
+        guard config.vibrateOnHover else { return }
+        stopVibration()
+        let pattern = config.patterns[category] ?? category.defaultPattern
+        let timer = Timer(timeInterval: max(config.vibrateInterval, 0.03), repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.haptics.tick(pattern)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        vibrateTimer = timer
+    }
+
+    private func stopVibration() {
+        vibrateTimer?.invalidate()
+        vibrateTimer = nil
     }
 
     private func isExcluded(_ bundleID: String?) -> Bool {

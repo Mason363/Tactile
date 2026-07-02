@@ -97,6 +97,12 @@ struct GeneralSettingsView: View {
                     format: { "\(Int($0)) Hz" },
                     caption: "How often the cursor is checked while moving. Higher feels more immediate during fast sweeps; lower uses slightly less CPU."
                 )
+                .disabled(settings.noLagMode)
+
+                Toggle("No Lag mode", isOn: $settings.noLagMode)
+                Text("Checks the cursor on every mouse event instead of at the polling rate, for the most instant feel. Uses more CPU while the mouse is moving; idle cost is still zero.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 LabeledSlider(
                     title: "Dwell delay",
@@ -143,6 +149,23 @@ struct TriggerSettingsView: View {
                 Text("Marks both edges of a control — one tap entering, one leaving — so you can feel its extent. Moving directly from one control to the next still taps only once.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Vibrate while hovering", isOn: $settings.vibrateOnHover)
+                Text("Keeps the trackpad buzzing for as long as the cursor rests on a clickable element, using that element's pattern. Uses a little CPU and battery while it buzzes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                LabeledSlider(
+                    title: "Vibration speed",
+                    value: $settings.vibrateRateMs,
+                    range: 30...150,
+                    step: 10,
+                    format: { "\(Int((1000 / $0).rounded())) pulses/sec" },
+                    caption: nil
+                )
+                .disabled(!settings.vibrateOnHover)
             }
 
             Section {

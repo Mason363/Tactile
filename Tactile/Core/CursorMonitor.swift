@@ -29,6 +29,11 @@ final class CursorMonitor {
     /// applies from the next event.
     var sampleInterval: CFTimeInterval = 1.0 / 60.0
 
+    /// No Lag mode: sample on every mouse event instead of at the polling
+    /// rate. The distance gate and skip region still apply, and the resolver
+    /// coalesces to one in-flight query, so cost stays bounded.
+    var unthrottled = false
+
     /// While the cursor stays inside this rect no new samples are emitted.
     /// Set by the pipeline after each resolution.
     var skipRegion: CGRect?
@@ -77,7 +82,7 @@ final class CursorMonitor {
     private func handleMove() {
         let now = CACurrentMediaTime()
         let elapsed = now - lastSampleTime
-        if elapsed < sampleInterval {
+        if !unthrottled, elapsed < sampleInterval {
             // Throttled — but if this turns out to be the last event of the
             // gesture, the resting position still needs to be resolved.
             scheduleTrailingSample(after: sampleInterval - elapsed)
