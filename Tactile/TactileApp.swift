@@ -2,16 +2,41 @@
 //  TactileApp.swift
 //  Tactile
 //
-//  Created by Mason Chen on 7/1/26.
-//
 
 import SwiftUI
 
 @main
 struct TactileApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @ObservedObject private var controller = AppController.shared
+
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        MenuBarExtra {
+            MenuBarView()
+                .environmentObject(controller)
+                .environmentObject(controller.settings)
+                .environmentObject(controller.permission)
+        } label: {
+            Image(systemName: controller.menuBarSymbol)
+                .accessibilityLabel("Tactile")
+        }
+        .menuBarExtraStyle(.menu)
+
+        Settings {
+            SettingsView()
+                .environmentObject(controller)
+                .environmentObject(controller.settings)
+                .environmentObject(controller.permission)
+        }
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let controller = AppController.shared
+        controller.bootstrap()
+        if !controller.permission.isTrusted {
+            OnboardingWindow.show(controller: controller)
         }
     }
 }
