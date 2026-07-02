@@ -93,7 +93,68 @@ final class ActuatorHapticEngine: FeedbackEngine {
         _ = actuate(actuator, pattern.actuationID, 0, 0, 0)
     }
 
+    // MARK: - Continuous buzz
+
+    /// Runs the actuator fast enough that individual pulses blur into a
+    /// continuous vibration — main-thread timers can't hold a steady beat
+    /// below ~30ms, so the pulse loop gets its own thread with a hard floor
+    /// of 4ms (250 pulses/sec). Power and thermals stay inside the driver's
+    /// own limits: each call plays the same predefined waveform the system
+    /// uses for its haptics, just scheduled back-to-back.
+    func startBuzz(_ pattern: FeedbackPattern, gaps: [TimeInterval]) {
+        let microseconds = gaps.map { UInt32(max($0, 0.004) * 1_000_000) }
+        buzzer.start(actuator: actuator, actuate: actuate, id: pattern.actuationID, gaps: microseconds)
+    }
+
+    func stopBuzz() {
+        buzzer.stop()
+    }
+
+    private let buzzer = Buzzer()
+
+    /// The pulse loop. Generation counting makes stop/start race-free: the
+    /// thread re-checks the generation before every pulse and exits the
+    /// moment it's stale.
+    private final class Buzzer {
+        private let lock = NSLock()
+        private var generation = 0
+
+        func start(actuator: UnsafeMutableRawPointer, actuate: @escaping ActuateFunc, id: Int32, gaps: [UInt32]) {
+            lock.lock()
+            generation += 1
+            let mine = generation
+            lock.unlock()
+            guard !gaps.isEmpty else { return }
+
+            let thread = Thread { [weak self] in
+                var step = 0
+                while let self, self.isCurrent(mine) {
+                    _ = actuate(actuator, id, 0, 0, 0)
+                    usleep(gaps[step % gaps.count])
+                    step += 1
+                }
+            }
+            thread.name = "com.masonchen.Tactile.buzz"
+            thread.qualityOfService = .userInteractive
+            thread.stackSize = 1 << 16
+            thread.start()
+        }
+
+        func stop() {
+            lock.lock()
+            generation += 1
+            lock.unlock()
+        }
+
+        private func isCurrent(_ mine: Int) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return mine == generation
+        }
+    }
+
     deinit {
+        buzzer.stop()
         _ = closeActuator(actuator)
         Unmanaged<AnyObject>.fromOpaque(actuator).release()
     }
