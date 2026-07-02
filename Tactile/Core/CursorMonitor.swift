@@ -41,6 +41,11 @@ final class CursorMonitor {
     /// coalesces to one in-flight query, so cost stays bounded.
     var unthrottled = false
 
+    /// Called with every raw mouse position, before any gating — feeds the
+    /// visual cursor indicator. Left nil (zero cost) unless the indicator
+    /// is on.
+    var onRawMove: ((CGPoint) -> Void)?
+
     /// Fires once each time the cursor touches an outer screen edge.
     var onScreenEdge: (() -> Void)?
     var screenEdgesEnabled = false
@@ -158,6 +163,9 @@ final class CursorMonitor {
     }
 
     private func handleMove() {
+        if let onRawMove, let point = currentPoint() {
+            onRawMove(point)
+        }
         let now = CACurrentMediaTime()
         let elapsed = now - lastSampleTime
         if !unthrottled, elapsed < sampleInterval {
