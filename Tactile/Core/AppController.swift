@@ -13,8 +13,12 @@ import Combine
 final class AppController: ObservableObject {
     static let shared = AppController()
 
-    let settings = SettingsStore()
+    let settings: SettingsStore
     let permission = PermissionManager()
+
+    private let cursorMonitor = CursorMonitor()
+    private let resolver = ElementResolver()
+    private let feedback: FeedbackController
 
     @Published private(set) var isActive = false
     @Published private(set) var pausedUntil: Date?
@@ -22,12 +26,28 @@ final class AppController: ObservableObject {
     private var resumeTimer: Timer?
     private var cancellables: Set<AnyCancellable> = []
 
+    private init() {
+        let settings = SettingsStore()
+        self.settings = settings
+        self.feedback = FeedbackController(config: settings.makeConfig())
+    }
+
     var menuBarSymbol: String {
         if !permission.isTrusted { return "cursorarrow.slash" }
         return isActive ? "cursorarrow.rays" : "cursorarrow"
     }
 
     func bootstrap() {
+        cursorMonitor.onSample = { [weak self] point in
+            self?.resolver.resolve(at: point)
+        }
+        resolver.onResolve = { [weak self] point, resolved in
+            self?.feedback.handle(point: point, resolved: resolved)
+        }
+        feedback.onSkipRegionUpdate = { [weak self] region in
+            self?.cursorMonitor.skipRegion = region
+        }
+
         settings.objectWillChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.settingsDidChange() }
@@ -75,14 +95,18 @@ final class AppController: ObservableObject {
         }
     }
 
-    // MARK: - Pipeline (wired up in the core milestone)
+    // MARK: - Pipeline
 
     private func pushConfig() {
+        feedback.config = settings.makeConfig()
     }
 
     private func startPipeline() {
+        cursorMonitor.start()
     }
 
     private func stopPipeline() {
+        cursorMonitor.stop()
+        feedback.reset()
     }
 }
