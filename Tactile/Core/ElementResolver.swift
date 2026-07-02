@@ -91,10 +91,50 @@ final class ElementResolver {
             subrole: resolved.subrole,
             actions: resolved.actions
         ) != nil
-        if !clickable, let ancestor = clickableAncestor(of: element, containing: point) {
+        if clickable { return resolved }
+
+        if let ancestor = clickableAncestor(of: element, containing: point) {
             return ancestor
         }
+
+        // Some apps (web content especially) hit-test lazily: the padding
+        // around a button reports the enclosing group even though the
+        // button's own frame contains the point. The button is a child of
+        // that group, so descend spatially through containing children.
+        if let descendant = clickableDescendant(of: element, containing: point, depth: 2) {
+            return descendant
+        }
+
         return resolved
+    }
+
+    private func clickableDescendant(of element: AXUIElement, containing point: CGPoint, depth: Int) -> ResolvedElement? {
+        guard depth > 0 else { return nil }
+
+        var childrenRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, "AXChildren" as CFString, &childrenRef) == .success,
+              let children = childrenRef as? [AXUIElement], !children.isEmpty
+        else { return nil }
+
+        for child in children.prefix(24) {
+            AXUIElementSetMessagingTimeout(child, Self.axTimeout)
+            guard let frame = frameAttribute(child), frame.contains(point) else { continue }
+
+            let resolved = makeResolved(child)
+            let clickable = ClickabilityClassifier.classify(
+                role: resolved.role,
+                subrole: resolved.subrole,
+                actions: resolved.actions
+            ) != nil
+            if clickable { return resolved }
+
+            // Only the child that contains the point is worth entering, so
+            // this stays a narrow spatial path, not a tree walk.
+            if let deeper = clickableDescendant(of: child, containing: point, depth: depth - 1) {
+                return deeper
+            }
+        }
+        return nil
     }
 
     private func clickableAncestor(of element: AXUIElement, containing point: CGPoint) -> ResolvedElement? {
