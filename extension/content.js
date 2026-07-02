@@ -51,6 +51,36 @@
       .some((w) => DANGER_WORDS.has(w));
   }
 
+  function accessibleName(el) {
+    const label = el.getAttribute("aria-label") || el.getAttribute("title");
+    if (label) return label.trim();
+    return (el.textContent || "").replace(/\s+/g, " ").trim();
+  }
+
+  // Simple mode's notion of a "primary" target: the main content links you
+  // actually navigate to, and prominent labeled controls — not the incidental
+  // chrome around them (three-dot menus, favicons, "Read more", icon buttons).
+  function isPrimary(el, category) {
+    if (category === "link") {
+      // Result titles are headings, or wrap / sit inside one.
+      const headingSel = "h1,h2,h3,h4,h5,[role=heading]";
+      if (el.matches(headingSel) || el.closest(headingSel) || el.querySelector(headingSel)) {
+        return true;
+      }
+      // Otherwise, only substantial link text counts — this drops short
+      // utility links like "Read more", "Show more", and bare site names.
+      return accessibleName(el).length >= 15;
+    }
+    if (category === "button" || category === "tab" || category === "toggle") {
+      if (accessibleName(el).length < 2) return false; // icon-only control
+      const r = el.getBoundingClientRect();
+      // Drop tiny icon controls (three-dot menus, chevrons); keep real buttons.
+      return Math.min(r.width, r.height) >= 24 && r.width * r.height >= 900;
+    }
+    // menuItem / textField / slider / genericPressable are never "primary".
+    return false;
+  }
+
   function ariaBool(el, name) {
     const v = el.getAttribute(name);
     if (v === "true") return true;
@@ -169,6 +199,7 @@
       enabled: isEnabled(match.el),
       on: match.on,
       danger: isDanger(match.el),
+      primary: isPrimary(match.el, match.category),
       inViewport: true,
     });
   }
@@ -227,6 +258,6 @@
   // Test hook, inert in the browser (`module` is undefined there). Lets the
   // classifier be unit-tested under Node without a real browser.
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { categoryOf, resolveClickable, isDanger, isEnabled };
+    module.exports = { categoryOf, resolveClickable, isDanger, isEnabled, isPrimary };
   }
 })();

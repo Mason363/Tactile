@@ -21,6 +21,10 @@ struct BridgeMessage: Codable {
     var enabled: Bool?
     var on: Bool?
     var danger: Bool?
+    /// Whether this is a "primary" target (a result-title link, a prominent
+    /// labeled control) versus an incidental one (three-dot menu, favicon,
+    /// "Read more"). Used by Simple mode to fire only on the primary targets.
+    var primary: Bool?
     /// Whether the cursor is inside the page. false means it moved to browser
     /// chrome or another window, so the accessibility path should take over.
     var inViewport: Bool?

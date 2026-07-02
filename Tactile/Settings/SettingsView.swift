@@ -286,7 +286,12 @@ struct HapticsSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Quiet Mode") {
+            Section("Quiet Modes") {
+                Toggle("Simple mode", isOn: $settings.simpleMode)
+                Text("Only the primary targets tick — result links and prominent labeled buttons — while incidental controls (three-dot menus, favicons, “Read more”, icons) stay silent. On web pages the browser extension makes the sharpest call.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Toggle("Only buttons in the focused window", isOn: $settings.focusedWindowButtonsOnly)
                 Text("Ignore everything except buttons in the window you're actively using. Overrides the choices above while on.")
                     .font(.caption)

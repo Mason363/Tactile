@@ -190,7 +190,9 @@ final class FeedbackController {
         }
 
         let enabled = message.enabled ?? true
-        let passes = config.enabledCategories.contains(category) && bridgeFocusOK(category)
+        let passes = config.enabledCategories.contains(category)
+            && bridgeFocusOK(category)
+            && bridgeSimpleOK(message)
         leaveCurrentElement(enteringFiringElement: enabled && passes)
         lastElement = nil
 
@@ -247,6 +249,14 @@ final class FeedbackController {
         return category == .button
     }
 
+    /// Simple mode for web content: the extension decides which targets are
+    /// primary (result-title links, prominent labeled controls) from the real
+    /// DOM, so here we just honor its flag.
+    private func bridgeSimpleOK(_ message: BridgeMessage) -> Bool {
+        guard config.simpleMode else { return true }
+        return message.primary ?? false
+    }
+
     /// Called by the pipeline when the cursor touches an outer screen edge.
     func screenEdgeBump() {
         guard config.screenEdgesEnabled else { return }
@@ -287,7 +297,7 @@ final class FeedbackController {
     /// clickable, destructive, or disabled.
     private func emitHoverState(category: FeedbackCategory?, resolved: ResolvedElement) {
         guard let onHoverState else { return }
-        guard let category, config.enabledCategories.contains(category) else {
+        guard let category, config.enabledCategories.contains(category), passesSimpleMode(category, resolved) else {
             onHoverState(.none, nil)
             return
         }
@@ -307,12 +317,35 @@ final class FeedbackController {
             && config.enabledCategories.contains(category)
             && !isExcluded(resolved.bundleID)
             && passesFocusFilter(category, resolved)
+            && passesSimpleMode(category, resolved)
     }
 
     /// Quiet mode: when on, only buttons in the focused window get through.
     private func passesFocusFilter(_ category: FeedbackCategory, _ resolved: ResolvedElement) -> Bool {
         guard config.focusedWindowButtonsOnly else { return true }
         return category == .button && resolved.isInFocusedWindow
+    }
+
+    /// Simple mode: cut the noise to the primary targets. Fire only for
+    /// well-labeled, reasonably sized links, buttons, tabs, toggles, and menu
+    /// items — dropping icon-only controls (three-dot menus, favicons),
+    /// sliders, text fields, and the ambiguous generic-pressable bucket. The
+    /// browser extension makes a sharper call for web pages (see handleBridge);
+    /// this is the best the accessibility tree alone allows.
+    private func passesSimpleMode(_ category: FeedbackCategory, _ resolved: ResolvedElement) -> Bool {
+        guard config.simpleMode else { return true }
+        switch category {
+        case .slider, .textField, .genericPressable:
+            return false
+        case .link, .button, .tab, .toggle, .menuItem:
+            break
+        }
+        // Must carry a real text label — this is what drops icon-only controls.
+        let label = (resolved.title ?? "").unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.count
+        guard label >= 2 else { return false }
+        // And not be a tiny control.
+        if let f = resolved.frame, min(f.width, f.height) < 14 { return false }
+        return true
     }
 
     private func isExcluded(_ bundleID: String?) -> Bool {

@@ -112,6 +112,7 @@ struct FeedbackConfig {
     var waveforms: [FeedbackCategory: HapticWaveform]
     var excludedBundleIDs: Set<String>
     var focusedWindowButtonsOnly: Bool
+    var simpleMode: Bool
     var rateLimitInterval: TimeInterval
     var dwellDelay: TimeInterval
     var hapticOnExit: Bool
@@ -145,6 +146,7 @@ struct SettingsSnapshot: Codable {
     var focusedWindowButtonsOnly = false
     // Fields added after profiles first shipped are Optional so snapshots
     // saved by older versions still decode; absent means the default.
+    var simpleMode: Bool? = false
     var browserIntegrationEnabled: Bool? = false
     var hoverCircleEnabled: Bool? = false
     var hoverCircleDiameter: Double? = 22
@@ -212,6 +214,14 @@ final class SettingsStore: ObservableObject {
     /// Quiet mode: only fire for buttons, and only in the focused window.
     @Published var focusedWindowButtonsOnly: Bool {
         didSet { defaults.set(focusedWindowButtonsOnly, forKey: "focusedWindowButtonsOnly") }
+    }
+
+    /// Simple mode: fire only on prominent primary targets — links, well-
+    /// labeled buttons — and skip incidental controls (three-dot menus,
+    /// favicons, "Read more", icons). On the web the extension picks the
+    /// primary targets; elsewhere it's a prominence + label heuristic.
+    @Published var simpleMode: Bool {
+        didSet { defaults.set(simpleMode, forKey: "simpleMode") }
     }
 
     /// Chrome browser integration: while Chrome is frontmost and the cursor is
@@ -365,6 +375,7 @@ final class SettingsStore: ObservableObject {
 
         excludedBundleIDs = defaults.stringArray(forKey: "excludedBundleIDs") ?? []
         focusedWindowButtonsOnly = defaults.object(forKey: "focusedWindowButtonsOnly") as? Bool ?? false
+        simpleMode = defaults.object(forKey: "simpleMode") as? Bool ?? false
         browserIntegrationEnabled = defaults.object(forKey: "browserIntegrationEnabled") as? Bool ?? false
         hoverCircleEnabled = defaults.object(forKey: "hoverCircleEnabled") as? Bool ?? false
         hoverCircleDiameter = defaults.object(forKey: "hoverCircleDiameter") as? Double ?? 22
@@ -402,6 +413,7 @@ final class SettingsStore: ObservableObject {
             waveforms: categoryWaveforms,
             excludedBundleIDs: Set(excludedBundleIDs),
             focusedWindowButtonsOnly: focusedWindowButtonsOnly,
+            simpleMode: simpleMode,
             rateLimitInterval: rateLimitMs / 1000,
             dwellDelay: dwellMs / 1000,
             hapticOnExit: hapticOnExit,
@@ -434,6 +446,7 @@ final class SettingsStore: ObservableObject {
         snapshot.categoryWaveforms = Dictionary(uniqueKeysWithValues: categoryWaveforms.map { ($0.key.rawValue, $0.value) })
         snapshot.excludedBundleIDs = excludedBundleIDs
         snapshot.focusedWindowButtonsOnly = focusedWindowButtonsOnly
+        snapshot.simpleMode = simpleMode
         snapshot.browserIntegrationEnabled = browserIntegrationEnabled
         snapshot.hoverCircleEnabled = hoverCircleEnabled
         snapshot.hoverCircleDiameter = hoverCircleDiameter
@@ -477,6 +490,7 @@ final class SettingsStore: ObservableObject {
         categoryWaveforms = waveforms
         excludedBundleIDs = snapshot.excludedBundleIDs
         focusedWindowButtonsOnly = snapshot.focusedWindowButtonsOnly
+        simpleMode = snapshot.simpleMode ?? false
         browserIntegrationEnabled = snapshot.browserIntegrationEnabled ?? false
         hoverCircleEnabled = snapshot.hoverCircleEnabled ?? false
         hoverCircleDiameter = snapshot.hoverCircleDiameter ?? 22
