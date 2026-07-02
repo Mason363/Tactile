@@ -136,7 +136,22 @@ final class ElementResolver {
         guard error == .success, let element = elementRef else { return nil }
 
         let resolved = makeResolved(element)
-        if isClickable(resolved) { return enrich(resolved) }
+        if isClickable(resolved) {
+            // A generic pressable is the weak catch-all bucket — often a
+            // *container* that merely advertises a press action while holding
+            // the real controls inside it (SwiftUI Form rows expose the whole
+            // row this way; so do many web and Electron wrappers). Prefer a
+            // more specific control under the cursor; keep the container only
+            // if there's nothing better, so genuine <div>-style buttons with
+            // no inner control still fire.
+            if ClickabilityClassifier.classify(role: resolved.role, subrole: resolved.subrole, actions: resolved.actions) == .genericPressable {
+                let deadline = CACurrentMediaTime() + Self.searchBudget
+                if let specific = specificDescendant(of: element, containing: point, depth: 3, deadline: deadline) {
+                    return enrich(specific)
+                }
+            }
+            return enrich(resolved)
+        }
 
         // Everything below is best-effort recovery of a clickable element
         // from a container, capped by a wall-clock deadline so a slow app
@@ -303,6 +318,29 @@ final class ElementResolver {
             // Only the child that contains the point is worth entering, so
             // this stays a narrow spatial path, not a tree walk.
             if let deeper = clickableDescendant(of: child, containing: point, depth: depth - 1, deadline: deadline, maxPerLevel: maxPerLevel) {
+                return deeper
+            }
+        }
+        return nil
+    }
+
+    /// Spatial descent that only accepts a *specifically* classified control —
+    /// anything but another generic pressable — so a pressable container
+    /// resolves to the real button or link inside it, descending through
+    /// generic wrappers on the way down.
+    private func specificDescendant(of element: AXUIElement, containing point: CGPoint, depth: Int, deadline: CFTimeInterval) -> ResolvedElement? {
+        guard depth > 0, CACurrentMediaTime() < deadline else { return nil }
+
+        for child in boundedChildren(of: element, maxValues: Self.maxChildrenPerLevel) {
+            if CACurrentMediaTime() >= deadline { return nil }
+            AXUIElementSetMessagingTimeout(child, Self.axTimeout)
+            guard let frame = frameAttribute(child), frame.contains(point) else { continue }
+
+            let resolved = makeResolved(child)
+            let category = ClickabilityClassifier.classify(role: resolved.role, subrole: resolved.subrole, actions: resolved.actions)
+            if let category, category != .genericPressable { return resolved }
+
+            if let deeper = specificDescendant(of: child, containing: point, depth: depth - 1, deadline: deadline) {
                 return deeper
             }
         }
