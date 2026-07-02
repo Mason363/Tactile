@@ -42,8 +42,13 @@ enum ClickabilityClassifier {
             return .textField
         default:
             // Custom controls — common in web and Electron apps — often use
-            // generic roles but advertise a press action.
-            return actions.contains("AXPress") ? .genericPressable : nil
+            // generic roles but advertise a press action. Finder and other
+            // file browsers don't: files, folders, sidebar shortcuts, and
+            // desktop icons expose AXOpen (activate) instead of AXPress, so
+            // treat that as clickable too. AXShowMenu is deliberately excluded
+            // — it sits on plenty of inert containers and would over-fire.
+            let clickActions: Set<String> = ["AXPress", "AXOpen"]
+            return actions.contains(where: clickActions.contains) ? .genericPressable : nil
         }
     }
 }
