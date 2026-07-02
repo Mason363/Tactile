@@ -8,25 +8,29 @@
     <description>Updates for Tactile.</description>
     <language>en</language>
     <!--
-      Sparkle reads this feed (SUFeedURL in Info.plist) to decide whether an
-      update exists. The item below advertises the currently shipping version,
+      Sparkle reads this feed (Info.plist SUFeedURL) to decide whether a newer
+      version exists. The newest <item> below advertises the shipping version,
       so "Check for Updates…" reports "up to date" until a newer item is added.
 
       To publish an update:
-        1. Bump sparkle:version (CFBundleVersion) and shortVersionString.
-        2. Add an <enclosure url="…Tactile-x.y.z.zip" sparkle:edSignature="…"
-           length="…"/> pointing at the notarized, zipped app on a GitHub
-           release, signed with Sparkle's `sign_update`.
-        3. Fill SUPublicEDKey in the build settings with the matching public key
-           from `generate_keys` (see README → Releasing).
+        1. Bump MARKETING_VERSION and CURRENT_PROJECT_VERSION in the project.
+        2. Archive with Developer ID, notarize, and zip the .app.
+        3. Sign the zip with Sparkle's sign_update to get the edSignature.
+        4. Add a new <item> at the top with an <enclosure> pointing at the zip
+           on the GitHub release, filling sparkle:version (CFBundleVersion),
+           sparkle:shortVersionString, length (bytes), and sparkle:edSignature.
+        5. Set SUPublicEDKey in Info.plist to the matching public key.
     -->
     <item>
-      <title>1.0</title>
-      <sparkle:version>1</sparkle:version>
-      <sparkle:shortVersionString>1.0</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <title>Tactile 1.0</title>
       <pubDate>Wed, 02 Jul 2026 00:00:00 +0000</pubDate>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
       <description><![CDATA[<p>Initial public release.</p>]]></description>
+      <enclosure url="https://github.com/Mason363/Tactile/releases/download/v1.0/Tactile-1.0.zip"
+                 sparkle:version="1"
+                 sparkle:shortVersionString="1.0"
+                 length="5000000"
+                 type="application/octet-stream" />
     </item>
   </channel>
 </rss>
