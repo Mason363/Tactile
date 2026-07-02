@@ -251,10 +251,12 @@ final class FeedbackController {
 
     /// Simple mode for web content: the extension decides which targets are
     /// primary (result-title links, prominent labeled controls) from the real
-    /// DOM, so here we just honor its flag.
+    /// DOM, so here we just honor its flag. Fail *open* — if an older,
+    /// not-yet-reloaded extension doesn't report `primary`, keep firing rather
+    /// than going silent; the filtering starts once the extension is updated.
     private func bridgeSimpleOK(_ message: BridgeMessage) -> Bool {
         guard config.simpleMode else { return true }
-        return message.primary ?? false
+        return message.primary ?? true
     }
 
     /// Called by the pipeline when the cursor touches an outer screen edge.
