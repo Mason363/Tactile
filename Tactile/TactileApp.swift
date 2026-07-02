@@ -19,10 +19,12 @@ struct TactileApp: App {
                 .environmentObject(controller.permission)
         } label: {
             // The braille-T mark, as a template image so the system tints it
-            // for menu bar appearance. The slash glyph stays as the at-a-glance
-            // signal that accessibility permission is missing.
+            // for menu bar appearance. Built as an NSImage with isTemplate set
+            // explicitly — MenuBarExtra doesn't reliably honor the asset
+            // catalog's template intent. The slash glyph stays as the
+            // at-a-glance signal that accessibility permission is missing.
             if controller.permission.isTrusted {
-                Image("MenuBarIcon")
+                Image(nsImage: Self.menuBarIcon)
                     .accessibilityLabel("Tactile")
             } else {
                 Image(systemName: "cursorarrow.slash")
@@ -31,12 +33,21 @@ struct TactileApp: App {
         }
         .menuBarExtraStyle(.menu)
     }
+
+    private static let menuBarIcon: NSImage = {
+        let image = NSImage(named: "MenuBarIcon") ?? NSImage()
+        image.isTemplate = true
+        image.size = NSSize(width: 18, height: 18)
+        return image
+    }()
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let controller = AppController.shared
         controller.bootstrap()
+        // Start Sparkle so background update checks are scheduled.
+        _ = Updater.shared
         if !controller.permission.isTrusted {
             OnboardingWindow.show(controller: controller)
         }
