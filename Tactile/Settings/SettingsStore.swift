@@ -345,10 +345,16 @@ final class SettingsStore: ObservableObject {
     }
 
     func makeConfig() -> FeedbackConfig {
-        FeedbackConfig(
+        // Tactile never gives hover feedback inside its own windows — a
+        // config surface full of controls would otherwise buzz constantly.
+        // The Playground tab provides its own feel on demand instead.
+        var excluded = Set(excludedBundleIDs)
+        if let own = Bundle.main.bundleIdentifier { excluded.insert(own) }
+
+        return FeedbackConfig(
             enabledCategories: Set(categoryEnabled.filter(\.value).keys),
             waveforms: categoryWaveforms,
-            excludedBundleIDs: Set(excludedBundleIDs),
+            excludedBundleIDs: excluded,
             rateLimitInterval: rateLimitMs / 1000,
             dwellDelay: dwellMs / 1000,
             hapticOnExit: hapticOnExit,
