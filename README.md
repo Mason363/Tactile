@@ -14,6 +14,9 @@ The pipeline is fully event-driven: when the mouse is still, Tactile does nothin
 
 - **Works everywhere** — native apps, browsers, Electron apps; anything that exposes an accessibility tree.
 - **Per-element triggers** — choose which kinds of elements tick (buttons, links, checkboxes & switches, menus, tabs, sliders, text fields, and custom pressable controls), each with its own haptic pattern (Light / Standard / Firm).
+- **Enhanced haptics (optional)** — drives the trackpad actuator directly so Light/Standard/Firm become physically different strengths. Uses a private system framework, loaded at runtime with automatic fallback to standard haptics if it's ever unavailable.
+- **Hover vibration** — optionally keep the trackpad buzzing while the cursor rests on a clickable element, with steady/pulses/heartbeat modes, its own strength, and adjustable speed.
+- **Hover-out taps & No Lag mode** — feel both edges of a control, and optionally sample on every mouse event for the most immediate response.
 - **Per-app exclusions** — silence Tactile in games, drawing canvases, or anything that gets noisy.
 - **Rate limiting** — set a minimum time between ticks so sweeping across a toolbar doesn't buzz.
 - **Dwell delay** — optionally require the cursor to rest on an element before it ticks; helps with steady targeting and reduces noise.

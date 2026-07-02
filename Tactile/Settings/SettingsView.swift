@@ -103,6 +103,19 @@ struct GeneralSettingsView: View {
                 Text("Checks the cursor on every mouse event instead of at the polling rate, for the most instant feel. Uses more CPU while the mouse is moving; idle cost is still zero.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Enhanced haptics", isOn: $settings.useEnhancedHaptics)
+                if ActuatorHapticEngine.shared == nil {
+                    Label("Not available on this Mac — standard haptics will be used.", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                } else {
+                    Text("Drives the trackpad actuator directly, so Light, Standard, and Firm become physically different strengths instead of preset feels. Uses an undocumented system interface; if a macOS update ever breaks it, Tactile falls back to standard haptics automatically.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 LabeledSlider(
                     title: "Dwell delay",
@@ -153,9 +166,24 @@ struct TriggerSettingsView: View {
 
             Section {
                 Toggle("Vibrate while hovering", isOn: $settings.vibrateOnHover)
-                Text("Keeps the trackpad buzzing for as long as the cursor rests on a clickable element, using that element's pattern. Uses a little CPU and battery while it buzzes.")
+                Text("Keeps the trackpad buzzing for as long as the cursor rests on a clickable element. Uses a little CPU and battery while it buzzes.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Picker("Vibration mode", selection: $settings.vibrationMode) {
+                    ForEach(VibrationMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(!settings.vibrateOnHover)
+
+                Picker("Vibration strength", selection: $settings.vibratePattern) {
+                    ForEach(FeedbackPattern.allCases) { pattern in
+                        Text(pattern.displayName).tag(pattern)
+                    }
+                }
+                .disabled(!settings.vibrateOnHover)
 
                 LabeledSlider(
                     title: "Vibration speed",
@@ -213,7 +241,13 @@ private struct CategoryRow: View {
                 .disabled(!isEnabled.wrappedValue)
 
                 Button("Try") {
-                    SystemHapticEngine().tick(pattern.wrappedValue)
+                    let engine: FeedbackEngine
+                    if settings.useEnhancedHaptics, let actuator = ActuatorHapticEngine.shared {
+                        engine = actuator
+                    } else {
+                        engine = SystemHapticEngine()
+                    }
+                    engine.tick(pattern.wrappedValue)
                 }
                 .disabled(!isEnabled.wrappedValue)
                 .accessibilityLabel("Try the pattern for \(category.displayName)")
@@ -241,6 +275,13 @@ struct SoundSettingsView: View {
             }
 
             Section {
+                Picker("Sound", selection: $settings.audioSoundName) {
+                    ForEach(AudioFeedbackEngine.availableSounds, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                .disabled(!settings.audioEnabled)
+
                 LabeledSlider(
                     title: "Click volume",
                     value: $settings.audioVolume,
@@ -254,6 +295,7 @@ struct SoundSettingsView: View {
                 Button("Test Sound") {
                     let engine = AudioFeedbackEngine()
                     engine.volume = settings.audioVolume
+                    engine.soundName = settings.audioSoundName
                     engine.tick(.generic)
                 }
                 .disabled(!settings.audioEnabled)

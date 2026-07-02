@@ -76,6 +76,32 @@ enum FeedbackPattern: String, CaseIterable, Identifiable {
     }
 }
 
+/// Temporal shape of the hover vibration.
+enum VibrationMode: String, CaseIterable, Identifiable {
+    case steady
+    case pulses
+    case heartbeat
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .steady: return "Steady"
+        case .pulses: return "Pulses"
+        case .heartbeat: return "Heartbeat"
+        }
+    }
+
+    /// Gaps between consecutive buzz ticks, cycled in order.
+    func gaps(base: TimeInterval) -> [TimeInterval] {
+        switch self {
+        case .steady: return [base]
+        case .pulses: return [base, base, base, base * 4]
+        case .heartbeat: return [0.1, max(base * 5, 0.45)]
+        }
+    }
+}
+
 /// An immutable snapshot of every setting the feedback pipeline needs.
 /// Rebuilt on the main thread whenever settings change and handed to the
 /// background pipeline, so the pipeline never touches UserDefaults.
@@ -88,8 +114,12 @@ struct FeedbackConfig {
     var hapticOnExit: Bool
     var vibrateOnHover: Bool
     var vibrateInterval: TimeInterval
+    var vibrationMode: VibrationMode
+    var vibratePattern: FeedbackPattern
+    var useEnhancedHaptics: Bool
     var audioEnabled: Bool
     var audioVolume: Double
+    var audioSoundName: String
 }
 
 @MainActor
@@ -147,6 +177,26 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(vibrateRateMs, forKey: "vibrateRateMs") }
     }
 
+    /// Temporal shape of the vibration (steady buzz, pulses, heartbeat).
+    @Published var vibrationMode: VibrationMode {
+        didSet { defaults.set(vibrationMode.rawValue, forKey: "vibrationMode") }
+    }
+
+    /// Strength of each vibration pulse, independent of per-category taps.
+    @Published var vibratePattern: FeedbackPattern {
+        didSet { defaults.set(vibratePattern.rawValue, forKey: "vibratePattern") }
+    }
+
+    /// Drive the actuator directly (private API) for real strength levels.
+    @Published var useEnhancedHaptics: Bool {
+        didSet { defaults.set(useEnhancedHaptics, forKey: "useEnhancedHaptics") }
+    }
+
+    /// System sound used for the click fallback.
+    @Published var audioSoundName: String {
+        didSet { defaults.set(audioSoundName, forKey: "audioSoundName") }
+    }
+
     /// Bypass the polling rate and check the cursor on every mouse event.
     @Published var noLagMode: Bool {
         didSet { defaults.set(noLagMode, forKey: "noLagMode") }
@@ -186,6 +236,10 @@ final class SettingsStore: ObservableObject {
         hapticOnExit = defaults.object(forKey: "hapticOnExit") as? Bool ?? false
         vibrateOnHover = defaults.object(forKey: "vibrateOnHover") as? Bool ?? false
         vibrateRateMs = defaults.object(forKey: "vibrateRateMs") as? Double ?? 50
+        vibrationMode = defaults.string(forKey: "vibrationMode").flatMap(VibrationMode.init(rawValue:)) ?? .steady
+        vibratePattern = defaults.string(forKey: "vibratePattern").flatMap(FeedbackPattern.init(rawValue:)) ?? .alignment
+        useEnhancedHaptics = defaults.object(forKey: "useEnhancedHaptics") as? Bool ?? false
+        audioSoundName = defaults.string(forKey: "audioSoundName") ?? "Pop"
         noLagMode = defaults.object(forKey: "noLagMode") as? Bool ?? false
         pollingHz = defaults.object(forKey: "pollingHz") as? Double ?? 60
         audioEnabled = defaults.object(forKey: "audioEnabled") as? Bool ?? false
@@ -202,8 +256,12 @@ final class SettingsStore: ObservableObject {
             hapticOnExit: hapticOnExit,
             vibrateOnHover: vibrateOnHover,
             vibrateInterval: vibrateRateMs / 1000,
+            vibrationMode: vibrationMode,
+            vibratePattern: vibratePattern,
+            useEnhancedHaptics: useEnhancedHaptics,
             audioEnabled: audioEnabled,
-            audioVolume: audioVolume
+            audioVolume: audioVolume,
+            audioSoundName: audioSoundName
         )
     }
 }

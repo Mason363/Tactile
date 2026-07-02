@@ -31,6 +31,15 @@ final class FeedbackController {
     private var lastTickTime: CFTimeInterval = 0
     private var dwellTimer: Timer?
     private var vibrateTimer: Timer?
+    private var vibrateStep = 0
+
+    /// Enhanced haptics when enabled and supported, public engine otherwise.
+    private var hapticEngine: FeedbackEngine {
+        if config.useEnhancedHaptics, let actuator = ActuatorHapticEngine.shared {
+            return actuator
+        }
+        return haptics
+    }
 
     private let log = Logger(subsystem: "com.masonchen.Tactile", category: "feedback")
 
@@ -122,17 +131,28 @@ final class FeedbackController {
     // MARK: - Hover vibration
 
     /// A stream of rapid pulses reads as a continuous buzz. Pulses go
-    /// straight to the actuator — the rate limit governs discrete ticks,
-    /// and the click sound stays out of it entirely.
+    /// straight to the actuator with their own strength setting — the rate
+    /// limit governs discrete ticks, and the click sound stays out of it
+    /// entirely. The vibration mode shapes the gaps between pulses.
     private func startVibrationIfEnabled(_ category: FeedbackCategory) {
         guard config.vibrateOnHover else { return }
         stopVibration()
-        let pattern = config.patterns[category] ?? category.defaultPattern
-        let timer = Timer(timeInterval: max(config.vibrateInterval, 0.03), repeats: true) { [weak self] _ in
+        scheduleNextVibratePulse()
+    }
+
+    private func scheduleNextVibratePulse() {
+        let gaps = config.vibrationMode.gaps(base: max(config.vibrateInterval, 0.03))
+        let gap = gaps[vibrateStep % gaps.count]
+        vibrateStep += 1
+
+        let timer = Timer(timeInterval: gap, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.haptics.tick(pattern)
+                guard let self, self.vibrateTimer != nil else { return }
+                self.hapticEngine.tick(self.config.vibratePattern)
+                self.scheduleNextVibratePulse()
             }
         }
+        // .common keeps the buzz alive during menu and drag tracking.
         RunLoop.main.add(timer, forMode: .common)
         vibrateTimer = timer
     }
@@ -140,6 +160,7 @@ final class FeedbackController {
     private func stopVibration() {
         vibrateTimer?.invalidate()
         vibrateTimer = nil
+        vibrateStep = 0
     }
 
     private func isExcluded(_ bundleID: String?) -> Bool {
@@ -153,9 +174,10 @@ final class FeedbackController {
         lastTickTime = now
 
         let pattern = config.patterns[category] ?? category.defaultPattern
-        haptics.tick(pattern)
+        hapticEngine.tick(pattern)
         if config.audioEnabled {
             audio.volume = config.audioVolume
+            audio.soundName = config.audioSoundName
             audio.tick(pattern)
         }
     }

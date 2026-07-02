@@ -80,6 +80,51 @@ final class ElementResolver {
         let error = AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &elementRef)
         guard error == .success, let element = elementRef else { return nil }
 
+        let resolved = makeResolved(element)
+
+        // The deepest element is often decoration inside the real control —
+        // the text label of a button, a span inside a link. When it isn't
+        // clickable itself, look a few ancestors up for a clickable element
+        // that still contains the cursor.
+        let clickable = ClickabilityClassifier.classify(
+            role: resolved.role,
+            subrole: resolved.subrole,
+            actions: resolved.actions
+        ) != nil
+        if !clickable, let ancestor = clickableAncestor(of: element, containing: point) {
+            return ancestor
+        }
+        return resolved
+    }
+
+    private func clickableAncestor(of element: AXUIElement, containing point: CGPoint) -> ResolvedElement? {
+        var current = element
+        for _ in 0..<3 {
+            var parentRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(current, "AXParent" as CFString, &parentRef) == .success,
+                  let parentValue = parentRef, CFGetTypeID(parentValue) == AXUIElementGetTypeID()
+            else { return nil }
+            let parent = parentValue as! AXUIElement
+
+            let resolved = makeResolved(parent)
+            // Structural roles end the walk — nothing clickable sits above.
+            if ["AXWindow", "AXSheet", "AXDrawer", "AXApplication", "AXMenuBar"].contains(resolved.role) {
+                return nil
+            }
+            let clickable = ClickabilityClassifier.classify(
+                role: resolved.role,
+                subrole: resolved.subrole,
+                actions: resolved.actions
+            ) != nil
+            if clickable, let frame = resolved.frame, frame.contains(point) {
+                return resolved
+            }
+            current = parent
+        }
+        return nil
+    }
+
+    private func makeResolved(_ element: AXUIElement) -> ResolvedElement {
         AXUIElementSetMessagingTimeout(element, Self.axTimeout)
 
         var pid: pid_t = 0
