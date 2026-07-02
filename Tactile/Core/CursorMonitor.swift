@@ -10,6 +10,13 @@ import QuartzCore
 /// resolving. Everything downstream is driven from here — when the mouse is
 /// still, nothing in the app runs.
 ///
+/// Events come from a listen-only CGEventTap rather than NSEvent global
+/// monitors: monitors never see events consumed by nested tracking loops
+/// (open menus, window drags, control tracking), which made feedback go
+/// silent inside menus and submenus. The tap observes at the window-server
+/// level, so those all work. NSEvent monitors remain as a fallback if tap
+/// creation fails.
+///
 /// Three gates keep the accessibility queries rare without adding felt lag:
 /// 1. A time throttle caps sampling at the configured polling rate, with a
 ///    trailing-edge sample so the cursor's final resting position is always
@@ -18,8 +25,8 @@ import QuartzCore
 /// 3. A skip region — the frame of the last resolved element — short-circuits
 ///    sampling entirely while the cursor stays inside the same element.
 ///
-/// All methods must be called on the main thread; NSEvent monitors deliver
-/// their events there.
+/// All methods must be called on the main thread; the tap's run-loop source
+/// lives on the main run loop, so its callback arrives there too.
 final class CursorMonitor {
     /// Called with the cursor position in global top-left (accessibility)
     /// coordinates.
@@ -43,6 +50,8 @@ final class CursorMonitor {
     /// Set by the pipeline after each resolution.
     var skipRegion: CGRect?
 
+    private var eventTap: CFMachPort?
+    private var tapRunLoopSource: CFRunLoopSource?
     private var globalMoveMonitor: Any?
     private var localMoveMonitor: Any?
     private var globalScrollMonitor: Any?
@@ -53,10 +62,87 @@ final class CursorMonitor {
 
     private let minDistance: CGFloat = 2
 
-    var isRunning: Bool { globalMoveMonitor != nil }
+    var isRunning: Bool { eventTap != nil || globalMoveMonitor != nil }
 
     func start() {
-        guard globalMoveMonitor == nil else { return }
+        guard !isRunning else { return }
+        if !startEventTap() {
+            startNSEventMonitors()
+        }
+    }
+
+    func stop() {
+        if let tapRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), tapRunLoopSource, .commonModes)
+        }
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+            CFMachPortInvalidate(eventTap)
+        }
+        eventTap = nil
+        tapRunLoopSource = nil
+
+        for monitor in [globalMoveMonitor, localMoveMonitor, globalScrollMonitor] {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+        }
+        globalMoveMonitor = nil
+        localMoveMonitor = nil
+        globalScrollMonitor = nil
+        cancelTrailingSample()
+        skipRegion = nil
+        lastPoint = nil
+        lastSampleTime = 0
+    }
+
+    // MARK: - Event sources
+
+    private func startEventTap() -> Bool {
+        let mask: CGEventMask =
+            (1 << CGEventType.mouseMoved.rawValue)
+            | (1 << CGEventType.leftMouseDragged.rawValue)
+            | (1 << CGEventType.scrollWheel.rawValue)
+
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: mask,
+            callback: { _, type, event, userInfo in
+                if let userInfo {
+                    let monitor = Unmanaged<CursorMonitor>.fromOpaque(userInfo).takeUnretainedValue()
+                    monitor.handleTapEvent(type: type)
+                }
+                return Unmanaged.passUnretained(event)
+            },
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else { return false }
+
+        guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else {
+            CFMachPortInvalidate(tap)
+            return false
+        }
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        eventTap = tap
+        tapRunLoopSource = source
+        return true
+    }
+
+    private func handleTapEvent(type: CGEventType) {
+        switch type {
+        case .mouseMoved, .leftMouseDragged:
+            handleMove()
+        case .scrollWheel:
+            handleScroll()
+        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            // The system disables slow taps; re-enable and keep going.
+            if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
+        default:
+            break
+        }
+    }
+
+    private func startNSEventMonitors() {
         globalMoveMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
             self?.handleMove()
         }
@@ -69,19 +155,6 @@ final class CursorMonitor {
         globalScrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.scrollWheel]) { [weak self] _ in
             self?.handleScroll()
         }
-    }
-
-    func stop() {
-        for monitor in [globalMoveMonitor, localMoveMonitor, globalScrollMonitor] {
-            if let monitor { NSEvent.removeMonitor(monitor) }
-        }
-        globalMoveMonitor = nil
-        localMoveMonitor = nil
-        globalScrollMonitor = nil
-        cancelTrailingSample()
-        skipRegion = nil
-        lastPoint = nil
-        lastSampleTime = 0
     }
 
     private func handleMove() {
