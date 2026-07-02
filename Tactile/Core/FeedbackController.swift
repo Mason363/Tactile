@@ -100,7 +100,7 @@ final class FeedbackController {
         // Disabled controls: optional single light pulse instead of silence,
         // so you can feel that something is there but inactive.
         if !resolved.enabled {
-            if config.feelDisabled, config.enabledCategories.contains(category) {
+            if config.feelDisabled, config.enabledCategories.contains(category), passesFocusFilter(category, resolved) {
                 play(.single(.alignment))
             }
             return
@@ -164,6 +164,13 @@ final class FeedbackController {
         resolved.enabled
             && config.enabledCategories.contains(category)
             && !isExcluded(resolved.bundleID)
+            && passesFocusFilter(category, resolved)
+    }
+
+    /// Quiet mode: when on, only buttons in the focused window get through.
+    private func passesFocusFilter(_ category: FeedbackCategory, _ resolved: ResolvedElement) -> Bool {
+        guard config.focusedWindowButtonsOnly else { return true }
+        return category == .button && resolved.isInFocusedWindow
     }
 
     private func isExcluded(_ bundleID: String?) -> Bool {

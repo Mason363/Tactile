@@ -5,6 +5,7 @@
 
 import AppKit
 import ApplicationServices
+import QuartzCore
 
 /// Everything the pipeline needs to know about the element under the cursor.
 struct ResolvedElement {
@@ -23,6 +24,9 @@ struct ResolvedElement {
     var isOn: Bool?
     /// Containing window, fetched only when window-boundary feedback is on.
     var window: AXUIElement?
+    /// Whether the element is in the system's focused window. Defaults true
+    /// so the focus filter is a no-op unless the pipeline asks for it.
+    var isInFocusedWindow = true
 }
 
 /// Hit-tests the accessibility tree on a background queue.
@@ -39,6 +43,10 @@ final class ElementResolver {
     /// call) so the pipeline can feel window-boundary crossings.
     var wantsWindow = false
 
+    /// When true, resolutions record whether the element is in the focused
+    /// window, for the buttons-in-focused-window quiet mode.
+    var wantsFocusedWindow = false
+
     private let queue = DispatchQueue(label: "com.masonchen.Tactile.resolver", qos: .userInteractive)
     private let systemWide = AXUIElementCreateSystemWide()
 
@@ -47,6 +55,9 @@ final class ElementResolver {
     private var isDraining = false
 
     private var bundleIDCache: [pid_t: String?] = [:]
+
+    private var cachedFocusedWindow: AXUIElement?
+    private var focusedWindowStamp: CFTimeInterval = 0
 
     private static let axTimeout: Float = 0.05
 
@@ -139,11 +150,19 @@ final class ElementResolver {
     private func enrich(_ resolved: ResolvedElement) -> ResolvedElement {
         var enriched = resolved
 
-        if wantsWindow {
+        if wantsWindow || wantsFocusedWindow {
             var windowRef: CFTypeRef?
             if AXUIElementCopyAttributeValue(resolved.element, "AXWindow" as CFString, &windowRef) == .success,
                let value = windowRef, CFGetTypeID(value) == AXUIElementGetTypeID() {
                 enriched.window = (value as! AXUIElement)
+            }
+        }
+
+        if wantsFocusedWindow {
+            if let window = enriched.window, let focused = systemFocusedWindow() {
+                enriched.isInFocusedWindow = CFEqual(window, focused)
+            } else {
+                enriched.isInFocusedWindow = false
             }
         }
 
@@ -322,6 +341,29 @@ final class ElementResolver {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else { return nil }
         return (value as? NSNumber)?.intValue
+    }
+
+    /// The window with system-wide keyboard focus, cached briefly since it
+    /// changes rarely and the lookup costs two AX calls.
+    private func systemFocusedWindow() -> AXUIElement? {
+        let now = CACurrentMediaTime()
+        if now - focusedWindowStamp < 0.25 { return cachedFocusedWindow }
+        focusedWindowStamp = now
+
+        var appRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(systemWide, "AXFocusedApplication" as CFString, &appRef) == .success,
+              let appValue = appRef, CFGetTypeID(appValue) == AXUIElementGetTypeID()
+        else { cachedFocusedWindow = nil; return nil }
+        let app = appValue as! AXUIElement
+        AXUIElementSetMessagingTimeout(app, Self.axTimeout)
+
+        var windowRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, "AXFocusedWindow" as CFString, &windowRef) == .success,
+              let windowValue = windowRef, CFGetTypeID(windowValue) == AXUIElementGetTypeID()
+        else { cachedFocusedWindow = nil; return nil }
+
+        cachedFocusedWindow = (windowValue as! AXUIElement)
+        return cachedFocusedWindow
     }
 
     private func actionNames(_ element: AXUIElement) -> [String] {

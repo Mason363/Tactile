@@ -111,6 +111,7 @@ struct FeedbackConfig {
     var enabledCategories: Set<FeedbackCategory>
     var waveforms: [FeedbackCategory: HapticWaveform]
     var excludedBundleIDs: Set<String>
+    var focusedWindowButtonsOnly: Bool
     var rateLimitInterval: TimeInterval
     var dwellDelay: TimeInterval
     var hapticOnExit: Bool
@@ -141,6 +142,7 @@ struct SettingsSnapshot: Codable {
     var categoryEnabled: [String: Bool] = [:]
     var categoryWaveforms: [String: HapticWaveform] = [:]
     var excludedBundleIDs: [String] = []
+    var focusedWindowButtonsOnly = false
     var rateLimitMs: Double = 50
     var dwellMs: Double = 0
     var pollingHz: Double = 60
@@ -197,6 +199,11 @@ final class SettingsStore: ObservableObject {
 
     @Published var excludedBundleIDs: [String] {
         didSet { defaults.set(excludedBundleIDs, forKey: "excludedBundleIDs") }
+    }
+
+    /// Quiet mode: only fire for buttons, and only in the focused window.
+    @Published var focusedWindowButtonsOnly: Bool {
+        didSet { defaults.set(focusedWindowButtonsOnly, forKey: "focusedWindowButtonsOnly") }
     }
 
     /// Minimum time between haptic events, in milliseconds. 0 disables.
@@ -319,6 +326,7 @@ final class SettingsStore: ObservableObject {
         categoryWaveforms = waveforms
 
         excludedBundleIDs = defaults.stringArray(forKey: "excludedBundleIDs") ?? []
+        focusedWindowButtonsOnly = defaults.object(forKey: "focusedWindowButtonsOnly") as? Bool ?? false
         rateLimitMs = defaults.object(forKey: "rateLimitMs") as? Double ?? 50
         dwellMs = defaults.object(forKey: "dwellMs") as? Double ?? 0
         hapticOnExit = defaults.object(forKey: "hapticOnExit") as? Bool ?? false
@@ -345,16 +353,11 @@ final class SettingsStore: ObservableObject {
     }
 
     func makeConfig() -> FeedbackConfig {
-        // Tactile never gives hover feedback inside its own windows — a
-        // config surface full of controls would otherwise buzz constantly.
-        // The Playground tab provides its own feel on demand instead.
-        var excluded = Set(excludedBundleIDs)
-        if let own = Bundle.main.bundleIdentifier { excluded.insert(own) }
-
-        return FeedbackConfig(
+        FeedbackConfig(
             enabledCategories: Set(categoryEnabled.filter(\.value).keys),
             waveforms: categoryWaveforms,
-            excludedBundleIDs: excluded,
+            excludedBundleIDs: Set(excludedBundleIDs),
+            focusedWindowButtonsOnly: focusedWindowButtonsOnly,
             rateLimitInterval: rateLimitMs / 1000,
             dwellDelay: dwellMs / 1000,
             hapticOnExit: hapticOnExit,
@@ -386,6 +389,7 @@ final class SettingsStore: ObservableObject {
         snapshot.categoryEnabled = Dictionary(uniqueKeysWithValues: categoryEnabled.map { ($0.key.rawValue, $0.value) })
         snapshot.categoryWaveforms = Dictionary(uniqueKeysWithValues: categoryWaveforms.map { ($0.key.rawValue, $0.value) })
         snapshot.excludedBundleIDs = excludedBundleIDs
+        snapshot.focusedWindowButtonsOnly = focusedWindowButtonsOnly
         snapshot.rateLimitMs = rateLimitMs
         snapshot.dwellMs = dwellMs
         snapshot.pollingHz = pollingHz
@@ -422,6 +426,7 @@ final class SettingsStore: ObservableObject {
         categoryEnabled = enabled
         categoryWaveforms = waveforms
         excludedBundleIDs = snapshot.excludedBundleIDs
+        focusedWindowButtonsOnly = snapshot.focusedWindowButtonsOnly
         rateLimitMs = snapshot.rateLimitMs
         dwellMs = snapshot.dwellMs
         pollingHz = snapshot.pollingHz

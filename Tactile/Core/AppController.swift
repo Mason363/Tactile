@@ -106,6 +106,7 @@ final class AppController: ObservableObject {
         cursorMonitor.unthrottled = settings.noLagMode
         cursorMonitor.screenEdgesEnabled = settings.screenEdgesEnabled
         resolver.wantsWindow = settings.windowBoundsEnabled
+        resolver.wantsFocusedWindow = settings.focusedWindowButtonsOnly
     }
 
     private func startPipeline() {

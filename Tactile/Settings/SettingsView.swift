@@ -164,6 +164,13 @@ struct TriggerSettingsView: View {
             }
 
             Section {
+                Toggle("Only buttons in the focused window", isOn: $settings.focusedWindowButtonsOnly)
+                Text("A quieter mode: ignore everything except buttons, and only in the window you're actively using. Overrides the per-element choices below while it's on.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Toggle("Vibrate while hovering", isOn: $settings.vibrateOnHover)
                 Text("Keeps the trackpad buzzing for as long as the cursor rests on a clickable element. Uses a little CPU and battery while it buzzes.")
                     .font(.caption)
