@@ -15,11 +15,7 @@ struct ProfilesView: View {
 
     var body: some View {
         Form {
-            Section("Profiles") {
-                Text("A profile is a snapshot of every Tactile setting. Save your current setup, then switch from here or the menu bar.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-
+            Section {
                 HStack {
                     TextField("New profile name", text: $newProfileName)
                     Button("Save Current") {
@@ -50,6 +46,12 @@ struct ProfilesView: View {
                         }
                     }
                 }
+            } header: {
+                Text("Saved Profiles")
+            } footer: {
+                Text("A profile is a snapshot of every setting. Switch from here or straight from the menu bar.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Import & Export") {

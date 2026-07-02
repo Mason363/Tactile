@@ -18,12 +18,6 @@ struct AppExclusionView: View {
             BrowserIntegrationSection()
 
             Section {
-                Text("Tactile won't give feedback while the cursor is over these apps. Useful for games, drawing canvases, or anything that gets noisy.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
                 if settings.excludedBundleIDs.isEmpty {
                     Text("No excluded apps")
                         .foregroundStyle(.secondary)
@@ -59,6 +53,12 @@ struct AppExclusionView: View {
                     }
                     .disabled(selection == nil)
                 }
+            } header: {
+                Text("Excluded Apps")
+            } footer: {
+                Text("Tactile stays silent while the cursor is over these apps — useful for games, drawing canvases, or anything that gets noisy.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

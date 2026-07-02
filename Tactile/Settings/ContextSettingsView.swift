@@ -12,60 +12,64 @@ struct ContextSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Danger") {
+            Section {
                 HStack {
                     Toggle("Warn on dangerous elements", isOn: $settings.dangerEnabled)
                     Spacer()
                     WaveformControl(waveform: $settings.dangerWaveform, accessibilityName: "dangerous elements")
                         .disabled(!settings.dangerEnabled)
                 }
-                Text("Window close buttons, and controls labeled with destructive words like Delete, Remove, or Reset, play this waveform instead of their normal one. Keyword detection is English-only for now.")
+            } header: {
+                Text("Danger")
+            } footer: {
+                Text("Close buttons and controls labeled Delete, Remove, Reset, and the like play this warning instead of their normal feel. English labels only, for now.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("State") {
+            Section {
                 Toggle("Feel checked and selected state", isOn: $settings.stateAware)
-                Text("Checked checkboxes, switches that are on, and the selected tab get an extra light pulse — hover tells you the state, not just the presence.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
                 Toggle("Feel disabled controls", isOn: $settings.feelDisabled)
-                Text("Disabled controls give a single light pulse instead of silence, so you know something is there but inactive.")
+            } header: {
+                Text("State")
+            } footer: {
+                Text("Checked boxes and selected tabs add a confirmation pulse; disabled controls give a single light pulse instead of silence.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("Hover Out") {
+            Section {
                 HStack {
                     Toggle("Play when leaving an element", isOn: $settings.hapticOnExit)
                     Spacer()
                     WaveformControl(waveform: $settings.exitWaveform, accessibilityName: "leaving an element")
                         .disabled(!settings.hapticOnExit)
                 }
-                Text("Marks both edges of a control so you can feel its extent. Moving directly from one control to the next plays only the new element's waveform.")
+            } header: {
+                Text("Hover Out")
+            } footer: {
+                Text("Marks both edges of a control so you can feel its extent.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("Spatial") {
+            Section {
                 HStack {
                     Toggle("Screen edges", isOn: $settings.screenEdgesEnabled)
                     Spacer()
                     WaveformControl(waveform: $settings.edgeWaveform, accessibilityName: "screen edges")
                         .disabled(!settings.screenEdgesEnabled)
                 }
-                Text("Bump once when the cursor reaches an outer edge of the screen. Edges between two displays stay silent.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
                 HStack {
                     Toggle("Window boundaries", isOn: $settings.windowBoundsEnabled)
                     Spacer()
                     WaveformControl(waveform: $settings.boundaryWaveform, accessibilityName: "window boundaries")
                         .disabled(!settings.windowBoundsEnabled)
                 }
-                Text("Play when the cursor crosses from one window into another — a physical map of your screen layout.")
+            } header: {
+                Text("Spatial")
+            } footer: {
+                Text("Bump at the outer edges of the screen, and when crossing from one window into another — a physical map of your layout.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
