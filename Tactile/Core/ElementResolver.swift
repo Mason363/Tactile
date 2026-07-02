@@ -112,7 +112,62 @@ final class ElementResolver {
             return descendant
         }
 
+        // Tab strips (Chrome, native AXTabGroup) hit-test to an inert wrapper
+        // whose tabs live in the AXTabs attribute rather than AXChildren.
+        // Resolve the individual tab the cursor is over.
+        if let tab = tabUnderCursor(near: element, point: point, deadline: deadline) {
+            return tab
+        }
+
         return resolved
+    }
+
+    /// Walks up to an enclosing AXTabGroup and returns the individual tab
+    /// whose frame contains the cursor, presented as a tab so the classifier
+    /// and the Tabs setting treat it accordingly.
+    private func tabUnderCursor(near element: AXUIElement, point: CGPoint, deadline: CFTimeInterval) -> ResolvedElement? {
+        var current = element
+        for _ in 0..<4 {
+            if CACurrentMediaTime() >= deadline { return nil }
+            if stringAttribute(current, "AXRole") == "AXTabGroup" {
+                return tab(in: current, containing: point, deadline: deadline)
+            }
+            var parentRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(current, "AXParent" as CFString, &parentRef) == .success,
+                  let value = parentRef, CFGetTypeID(value) == AXUIElementGetTypeID()
+            else { return nil }
+            current = value as! AXUIElement
+        }
+        return nil
+    }
+
+    private func tab(in tabGroup: AXUIElement, containing point: CGPoint, deadline: CFTimeInterval) -> ResolvedElement? {
+        var tabsRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(tabGroup, "AXTabs" as CFString, &tabsRef) == .success,
+              let tabs = tabsRef as? [AXUIElement]
+        else { return nil }
+
+        for tabElement in tabs.prefix(64) {
+            if CACurrentMediaTime() >= deadline { return nil }
+            AXUIElementSetMessagingTimeout(tabElement, Self.axTimeout)
+            guard let frame = frameAttribute(tabElement), frame.contains(point) else { continue }
+
+            var pid: pid_t = 0
+            AXUIElementGetPid(tabElement, &pid)
+            // Present it as a tab regardless of the underlying role (Chrome
+            // uses radio buttons) so it lands in the Tabs category.
+            return ResolvedElement(
+                element: tabElement,
+                role: stringAttribute(tabElement, "AXRole") ?? "AXRadioButton",
+                subrole: "AXTabButton",
+                actions: actionNames(tabElement),
+                frame: frame,
+                pid: pid,
+                bundleID: bundleID(for: pid),
+                enabled: boolAttribute(tabElement, "AXEnabled") ?? true
+            )
+        }
+        return nil
     }
 
     private func isClickable(_ resolved: ResolvedElement) -> Bool {
