@@ -38,7 +38,7 @@ final class ElementResolver {
 
     private var bundleIDCache: [pid_t: String?] = [:]
 
-    private static let axTimeout: Float = 0.1
+    private static let axTimeout: Float = 0.05
 
     /// Hard ceiling on the speculative ancestor/descent search per hit-test.
     /// The essential first resolution is never budgeted; only the extra work
@@ -113,24 +113,26 @@ final class ElementResolver {
         }
 
         // Tab strips (Chrome, native AXTabGroup) hit-test to an inert wrapper
-        // whose tabs live in the AXTabs attribute rather than AXChildren.
-        // Resolve the individual tab the cursor is over.
-        if let tab = tabUnderCursor(near: element, point: point, deadline: deadline) {
+        // several levels above the real tab buttons, which are neither
+        // exposed via AXTabs nor reachable by the shallow descent. Resolve
+        // the individual tab the cursor is over with a dedicated search.
+        if let tab = tabUnderCursor(near: element, point: point) {
             return tab
         }
 
         return resolved
     }
 
-    /// Walks up to an enclosing AXTabGroup and returns the individual tab
-    /// whose frame contains the cursor, presented as a tab so the classifier
-    /// and the Tabs setting treat it accordingly.
-    private func tabUnderCursor(near element: AXUIElement, point: CGPoint, deadline: CFTimeInterval) -> ResolvedElement? {
+    /// Walks up to an enclosing AXTabGroup and finds the AXTabButton under
+    /// the cursor. Runs on its own budget — it only triggers inside tab
+    /// strips, and the found tab's frame gets cached as the skip region.
+    private func tabUnderCursor(near element: AXUIElement, point: CGPoint) -> ResolvedElement? {
+        let deadline = CACurrentMediaTime() + 0.05
         var current = element
         for _ in 0..<4 {
             if CACurrentMediaTime() >= deadline { return nil }
             if stringAttribute(current, "AXRole") == "AXTabGroup" {
-                return tab(in: current, containing: point, deadline: deadline)
+                return tabButton(in: current, containing: point, depth: 7, deadline: deadline)
             }
             var parentRef: CFTypeRef?
             guard AXUIElementCopyAttributeValue(current, "AXParent" as CFString, &parentRef) == .success,
@@ -141,31 +143,35 @@ final class ElementResolver {
         return nil
     }
 
-    private func tab(in tabGroup: AXUIElement, containing point: CGPoint, deadline: CFTimeInterval) -> ResolvedElement? {
-        var tabsRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(tabGroup, "AXTabs" as CFString, &tabsRef) == .success,
-              let tabs = tabsRef as? [AXUIElement]
-        else { return nil }
+    /// Spatial search: descend only through children whose frame contains
+    /// the point (fan-out stays ~1 until the tab row itself) until an
+    /// AXTabButton is found.
+    private func tabButton(in container: AXUIElement, containing point: CGPoint, depth: Int, deadline: CFTimeInterval) -> ResolvedElement? {
+        guard depth > 0 else { return nil }
 
-        for tabElement in tabs.prefix(64) {
+        for child in boundedChildren(of: container, maxValues: 48) {
             if CACurrentMediaTime() >= deadline { return nil }
-            AXUIElementSetMessagingTimeout(tabElement, Self.axTimeout)
-            guard let frame = frameAttribute(tabElement), frame.contains(point) else { continue }
+            AXUIElementSetMessagingTimeout(child, Self.axTimeout)
+            guard let frame = frameAttribute(child), frame.contains(point) else { continue }
 
-            var pid: pid_t = 0
-            AXUIElementGetPid(tabElement, &pid)
-            // Present it as a tab regardless of the underlying role (Chrome
-            // uses radio buttons) so it lands in the Tabs category.
-            return ResolvedElement(
-                element: tabElement,
-                role: stringAttribute(tabElement, "AXRole") ?? "AXRadioButton",
-                subrole: "AXTabButton",
-                actions: actionNames(tabElement),
-                frame: frame,
-                pid: pid,
-                bundleID: bundleID(for: pid),
-                enabled: boolAttribute(tabElement, "AXEnabled") ?? true
-            )
+            if stringAttribute(child, "AXSubrole") == "AXTabButton" {
+                var pid: pid_t = 0
+                AXUIElementGetPid(child, &pid)
+                return ResolvedElement(
+                    element: child,
+                    role: stringAttribute(child, "AXRole") ?? "AXRadioButton",
+                    subrole: "AXTabButton",
+                    actions: actionNames(child),
+                    frame: frame,
+                    pid: pid,
+                    bundleID: bundleID(for: pid),
+                    enabled: boolAttribute(child, "AXEnabled") ?? true
+                )
+            }
+
+            if let found = tabButton(in: child, containing: point, depth: depth - 1, deadline: deadline) {
+                return found
+            }
         }
         return nil
     }

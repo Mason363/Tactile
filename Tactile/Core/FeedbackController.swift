@@ -55,13 +55,21 @@ final class FeedbackController {
             return
         }
 
-        let category = ClickabilityClassifier.classify(
+        let rawCategory = ClickabilityClassifier.classify(
             role: resolved.role,
             subrole: resolved.subrole,
             actions: resolved.actions
         )
 
-        log.debug("hit role=\(resolved.role, privacy: .public) subrole=\(resolved.subrole ?? "-", privacy: .public) category=\(category?.rawValue ?? "none", privacy: .public) app=\(resolved.bundleID ?? "?", privacy: .public)")
+        log.debug("hit role=\(resolved.role, privacy: .public) subrole=\(resolved.subrole ?? "-", privacy: .public) category=\(rawCategory?.rawValue ?? "none", privacy: .public) app=\(resolved.bundleID ?? "?", privacy: .public)")
+
+        // Reject "clickable" elements that are clearly containers: Electron
+        // and web apps mark window-sized groups as pressable, and treating
+        // one as a control both fires a bogus tick and — worse — caches a
+        // window-sized skip region that silences the whole app until the
+        // cursor leaves it.
+        let controlSized = resolved.frame.map(Self.isControlSized) ?? false
+        let category = controlSized ? rawCategory : nil
 
         // Clickable leaf elements can cache their whole frame — the cursor
         // can't reveal anything deeper inside them. Anything else (groups,
@@ -186,5 +194,12 @@ final class FeedbackController {
     /// element — absorbs jitter without hiding nearby controls.
     private static func jitterBox(around point: CGPoint) -> CGRect {
         CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)
+    }
+
+    /// Plausible bounds for an individual control. Generous enough for wide
+    /// menu items, banner links, and big tiles, but rejects the window-sized
+    /// "pressable" containers Electron apps report.
+    private static func isControlSized(_ frame: CGRect) -> Bool {
+        frame.width <= 900 && frame.height <= 350 && frame.width * frame.height <= 160_000
     }
 }
