@@ -4,7 +4,7 @@
 //
 //  Installs (and removes) the native-messaging host manifest Chrome reads to
 //  learn how to launch Tactile as a bridge. The host executable is Tactile's
-//  own binary — the same file branches into relay mode when Chrome spawns it
+//  own binary - the same file branches into relay mode when Chrome spawns it
 //  with a chrome-extension argv (see NativeMessagingHost).
 //
 
@@ -16,7 +16,7 @@ enum NativeMessagingManifest {
         Bundle.main.executablePath ?? CommandLine.arguments.first ?? ""
     }
 
-    /// True when the manifest exists and points at the current binary — so the
+    /// True when the manifest exists and points at the current binary - so the
     /// UI can prompt a re-install after the app is moved.
     static var isInstalled: Bool {
         guard let data = try? Data(contentsOf: BridgeConstants.manifestURL),

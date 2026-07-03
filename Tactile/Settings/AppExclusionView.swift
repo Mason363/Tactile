@@ -56,7 +56,7 @@ struct AppExclusionView: View {
             } header: {
                 Text("Excluded Apps")
             } footer: {
-                Text("Tactile stays silent while the cursor is over these apps — useful for games, drawing canvases, or anything that gets noisy.")
+                Text("Tactile stays silent while the cursor is over these apps. Useful for games and drawing canvases.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -108,7 +108,7 @@ private struct BrowserIntegrationSection: View {
     var body: some View {
         Section("Browser Integration") {
             Toggle("Chrome browser integration", isOn: $settings.browserIntegrationEnabled)
-            Text("While Chrome is frontmost, Tactile feels clickable elements from the page's real structure — including custom buttons that never reach macOS accessibility. Everything else keeps using the accessibility engine. Requires the companion Chrome extension.")
+            Text("While Chrome is frontmost, Tactile reads clickable elements from the page itself, including custom buttons invisible to macOS accessibility. Requires the companion Chrome extension.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

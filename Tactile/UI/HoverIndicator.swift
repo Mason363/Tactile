@@ -8,7 +8,7 @@
 //  crosshair guides through the cursor, a floating caption naming the
 //  hovered element, and a one-shot ripple that echoes each haptic fire.
 //  Everything lives in click-through overlay windows above normal content,
-//  joining every Space, and costs nothing while disabled — the pipeline
+//  joining every Space, and costs nothing while disabled - the pipeline
 //  doesn't even compute positions for aids that are off.
 //
 
@@ -77,7 +77,7 @@ final class HoverIndicator {
 
     /// Recolors the cursor aids and moves the outline/caption when the
     /// hovered element changes. `frame` is in accessibility (top-left)
-    /// coordinates; `caption` is what the element is ("Save — Button").
+    /// coordinates; `caption` is what the element is ("Save - Button").
     func setState(kind: HoverKind, frame: CGRect?, caption: String?) {
         self.kind = kind
         let color = color(for: kind)
@@ -118,7 +118,7 @@ final class HoverIndicator {
         window.orderFrontRegardless()
     }
 
-    /// One-shot expanding ripple at the cursor — the visual echo of a haptic
+    /// One-shot expanding ripple at the cursor - the visual echo of a haptic
     /// fire, so feedback is perceivable without a finger on the trackpad.
     func flashFire() {
         guard fireFlashEnabled else { return }

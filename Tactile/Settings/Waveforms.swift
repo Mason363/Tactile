@@ -16,7 +16,7 @@ struct WaveformStep: Codable, Identifiable {
 }
 
 /// A haptic waveform: an ordered sequence of pulses. Everything Tactile
-/// plays — taps, shakes, ramps, state pulses — is one of these.
+/// plays - taps, shakes, ramps, state pulses - is one of these.
 struct HapticWaveform: Codable, Equatable {
     var steps: [WaveformStep]
 

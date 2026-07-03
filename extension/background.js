@@ -1,4 +1,4 @@
-// Tactile browser bridge — background service worker.
+// Tactile browser bridge - background service worker.
 //
 // Holds the native-messaging port to Tactile's helper host and relays hover /
 // leave events from the page content scripts to it. The port is opened lazily

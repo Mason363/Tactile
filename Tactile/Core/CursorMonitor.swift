@@ -7,7 +7,7 @@ import AppKit
 import QuartzCore
 
 /// Watches global mouse movement and decides which positions are worth
-/// resolving. Everything downstream is driven from here — when the mouse is
+/// resolving. Everything downstream is driven from here - when the mouse is
 /// still, nothing in the app runs.
 ///
 /// Events come from a listen-only CGEventTap rather than NSEvent global
@@ -22,7 +22,7 @@ import QuartzCore
 ///    trailing-edge sample so the cursor's final resting position is always
 ///    resolved even when the last mouse event fell inside the throttle window.
 /// 2. A small distance gate ignores sub-pixel jitter.
-/// 3. A skip region — the frame of the last resolved element — short-circuits
+/// 3. A skip region - the frame of the last resolved element - short-circuits
 ///    sampling entirely while the cursor stays inside the same element.
 ///
 /// All methods must be called on the main thread; the tap's run-loop source
@@ -41,7 +41,7 @@ final class CursorMonitor {
     /// coalesces to one in-flight query, so cost stays bounded.
     var unthrottled = false
 
-    /// Called with every raw mouse position, before any gating — feeds the
+    /// Called with every raw mouse position, before any gating - feeds the
     /// visual cursor indicator. Left nil (zero cost) unless the indicator
     /// is on.
     var onRawMove: ((CGPoint) -> Void)?
@@ -196,7 +196,7 @@ final class CursorMonitor {
         let now = CACurrentMediaTime()
         let elapsed = now - lastSampleTime
         if !unthrottled, elapsed < sampleInterval {
-            // Throttled — but if this turns out to be the last event of the
+            // Throttled - but if this turns out to be the last event of the
             // gesture, the resting position still needs to be resolved (as a
             // settle, so it lands even if the final nudge was under 2 px).
             scheduleTrailingSample(after: sampleInterval - elapsed, settling: true)
@@ -216,7 +216,7 @@ final class CursorMonitor {
     /// a distance-gated rejection: the cursor was creeping in sub-`minDistance`
     /// steps and has now paused, so we resolve wherever it came to rest and
     /// skip the distance gate. Without this, a slow creep that stops inside the
-    /// 2 px dead zone — exactly what a hand does easing onto a control — would
+    /// 2 px dead zone - exactly what a hand does easing onto a control - would
     /// never resolve, and nothing would fire until the cursor jumped ≥2 px.
     private func sample(now: CFTimeInterval, settling: Bool = false) {
         cancelTrailingSample()
@@ -227,7 +227,7 @@ final class CursorMonitor {
         }
 
         if !settling, let lastPoint, hypot(point.x - lastPoint.x, point.y - lastPoint.y) < minDistance {
-            // Below the jitter threshold this instant — but arm a trailing
+            // Below the jitter threshold this instant - but arm a trailing
             // settle so the resting position still resolves if the movement
             // pauses here. Re-armed on each tiny move; fires once they stop.
             scheduleTrailingSample(after: sampleInterval, settling: true)
@@ -261,7 +261,7 @@ final class CursorMonitor {
         trailingTimer = nil
     }
 
-    /// Current cursor position in global top-left coordinates — the space
+    /// Current cursor position in global top-left coordinates - the space
     /// both `AXUIElementCopyElementAtPosition` and AX element frames use.
     private func currentPoint() -> CGPoint? {
         CGEvent(source: nil)?.location
@@ -270,7 +270,7 @@ final class CursorMonitor {
     // MARK: - Screen edges
 
     /// Bumps once when the cursor reaches an outer edge of the display
-    /// arrangement (edges shared with another display don't count — the
+    /// arrangement (edges shared with another display don't count - the
     /// cursor passes through those). Pure math, no accessibility calls.
     private func checkScreenEdge(_ point: CGPoint) {
         var displays = [CGDirectDisplayID](repeating: 0, count: 8)

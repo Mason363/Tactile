@@ -7,7 +7,7 @@
 **Feel the interface, not just see it.**
 
 Tactile is a macOS menu-bar utility that taps your Force Touch trackpad's haptic
-motor whenever the cursor passes over something clickable — in any app,
+motor whenever the cursor passes over something clickable, in any app,
 system-wide. Built as an accessibility aid: instead of relying on the subtle
 hover-color change most apps use, you *feel* a physical tick under your finger
 when the cursor reaches a button, link, checkbox, menu, or tab.
@@ -36,42 +36,44 @@ per-element, so continuous use stays under a few percent of one core.
 
 ## Features
 
-- **Works everywhere** — native apps, Finder (files, folders, sidebar, and
+- **Works everywhere**: native apps, Finder (files, folders, sidebar, and
   desktop icons), browsers, and Electron apps; anything that exposes an
   accessibility tree.
-- **Chrome browser bridge (optional)** — a companion extension reads the real
+- **Chrome browser bridge (optional)**: a companion extension reads the real
   page DOM, so `<div>`-style buttons that never reach the accessibility tree
   still tick. See [`extension/`](extension/).
-- **Haptic waveforms** — every feel is a composable waveform: pick a preset
+- **Haptic waveforms**: every feel is a composable waveform: pick a preset
   (taps, double/triple tap, ramps, shake, heartbeat) or compose your own pulse
   by pulse, per element type.
-- **Contextual danger feel** — window close buttons and controls labeled
+- **Contextual danger feel**: window close buttons and controls labeled
   Delete/Remove/Reset/etc. play their own warning waveform.
-- **State awareness** — checked checkboxes and the selected tab add a
+- **State awareness**: checked checkboxes and the selected tab add a
   confirmation pulse; optionally feel disabled controls as a dull tap.
-- **Hover-out feel** — a separate waveform when leaving a control, so you can
+- **Hover-out feel**: a separate waveform when leaving a control, so you can
   feel its extent.
-- **Spatial feedback** — optional bumps at outer screen edges and when the
+- **Spatial feedback**: optional bumps at outer screen edges and when the
   cursor crosses window boundaries.
-- **Visual aids** — a colored circle that rides under the cursor (green over
+- **Visual aids**: a colored circle that rides under the cursor (green over
   clickable, red over destructive) and an outline around the hovered element,
   for low-vision use. Colors are configurable.
-- **Enhanced haptics (optional)** — drives the trackpad actuator directly so
+- **Enhanced haptics (optional)**: drives the trackpad actuator directly so
   Light/Standard/Firm become physically different strengths. Uses a private
   system framework, loaded at runtime with automatic fallback to standard
   haptics if it's ever unavailable.
-- **Continuous vibration** — with enhanced haptics on, keep the trackpad
+- **Continuous vibration**: with enhanced haptics on, keep the trackpad
   buzzing while the cursor rests on a control, fast enough (up to 250 pulses/s)
   to feel like a true vibration rather than a series of taps.
-- **Custom sounds** — an optional click for external-mouse users; use a
+- **Custom sounds**: an optional click for external-mouse users; use a
   built-in sound or import your own.
-- **Profiles & import/export** — save named snapshots of your whole setup,
+- **Profiles & import/export**: save named snapshots of your whole setup,
   switch from the menu bar, and share configurations as JSON.
-- **Playground** — real sample controls to feel your configuration live while
+- **Playground**: real sample controls to feel your configuration live while
   tuning it.
 - **Per-app exclusions, rate limiting, dwell delay, No Lag mode, launch at
-  login, one-click pause** — the usual knobs for taste and battery.
-- **Automatic updates** — via [Sparkle](https://sparkle-project.org).
+  login, one-click pause**: the usual knobs for taste and battery.
+- **Keyboard haptics**: tick on shortcuts, every key, modifiers, or your own
+  recorded key combinations, each with its own waveform.
+- **Automatic updates**: via [Sparkle](https://sparkle-project.org).
 
 > [image - the redesigned Settings window, sidebar visible, on the Haptics pane]
 
@@ -80,7 +82,7 @@ per-element, so continuous use stays under a few percent of one core.
 ## Requirements
 
 - A Mac with a Force Touch trackpad (built-in on modern MacBook Pro/Air, or a
-  Magic Trackpad). Haptics are felt while a finger rests on the trackpad — which
+  Magic Trackpad). Haptics are felt while a finger rests on the trackpad, which
   is naturally the case while using it. External mice can use the click sound.
 - macOS 14.6 or later.
 - The **Accessibility** permission (System Settings → Privacy & Security →
@@ -99,21 +101,21 @@ per-element, so continuous use stays under a few percent of one core.
 
    Then open it normally. (You only need to do this once. It's the standard
    step for open-source Mac apps distributed without a paid notarization
-   subscription — the full source is here for you to inspect or build yourself.)
+   subscription, the full source is here for you to inspect or build yourself.)
 3. Launch Tactile, grant the Accessibility permission when prompted, and you're
    set. The icon lives in the menu bar.
 
 ### Chrome extension (optional)
 
-For web pages, load the companion extension for richer coverage — see
+For web pages, load the companion extension for richer coverage; see
 [`extension/README.md`](extension/README.md). Then enable **Browser
 integration** in Settings → Apps & Browser.
 
 ## Building
 
 Open `Tactile.xcodeproj` in Xcode and run. Package dependencies (Sparkle)
-resolve automatically. The app is unsandboxed — the system-wide Accessibility
-API requires it — so it isn't App Store distributable; distribute with Developer
+resolve automatically. The app is unsandboxed, the system-wide Accessibility
+API requires it, so it isn't App Store distributable; distribute with Developer
 ID signing and notarization.
 
 ## Releasing (maintainers)
@@ -122,7 +124,7 @@ Automatic updates use Sparkle and are driven by
 [`appcast.xml`](appcast.xml) at the repo root (the feed URL is set in
 `Info.plist` → `SUFeedURL`). One-time setup, then per-release steps:
 
-**One time — signing keys**
+**One time: signing keys**
 
 1. Run Sparkle's `generate_keys` (bundled with the Sparkle package /
    [release tools](https://github.com/sparkle-project/Sparkle/releases)). It
@@ -144,13 +146,13 @@ check.
 ## Privacy & safety
 
 - **No network access of its own.** Tactile makes exactly one kind of outbound
-  request — the Sparkle update check to this repository — and nothing else. It
+  request, the Sparkle update check to this repository, and nothing else. It
   has no analytics, no telemetry, and collects nothing.
 - **On-device only.** The Accessibility permission is used solely to identify
   the *kind* of UI element under the cursor (button, link, …), never your
   content, and never keystrokes.
 - **Local IPC only.** The optional browser bridge talks to the extension over a
-  local Unix socket in your Application Support folder — never over the network.
+  local Unix socket in your Application Support folder, never over the network.
 - **Auditable.** The one private API (the trackpad actuator, via
   MultitouchSupport) is loaded at runtime with `dlopen` and falls back safely;
   everything else is public API. The whole source is here.

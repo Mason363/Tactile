@@ -48,11 +48,11 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .general: return "Power, startup, and permission."
-        case .haptics: return "Which elements you feel, and how each one feels."
+        case .haptics: return "Which elements you feel, and how."
         case .vibration: return "A continuous buzz while resting on an element."
         case .keyboard: return "Feel keys and shortcuts as you type."
         case .context: return "Danger, state, hover-out, and spatial feel."
-        case .visual: return "See what you feel: cursor ring, element highlight, crosshair, name tag, and fire ripple."
+        case .visual: return "See what you feel."
         case .sound: return "An audible click alongside the haptics."
         case .performance: return "Responsiveness and resource trade-offs."
         case .apps: return "Where Tactile stays quiet, and the Chrome integration."
@@ -280,11 +280,11 @@ struct HapticsSettingsView: View {
             Section {
                 Toggle("Enhanced haptics", isOn: $settings.useEnhancedHaptics)
                 if ActuatorHapticEngine.shared == nil {
-                    Label("Not available on this Mac — standard haptics are used.", systemImage: "exclamationmark.triangle")
+                    Label("Not available on this Mac. Standard haptics are used.", systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(.orange)
                 } else {
-                    Text("Drives the trackpad directly so Light, Standard, and Firm become physically different strengths — and unlocks true continuous vibration.")
+                    Text("Makes Light, Standard, and Firm physically different strengths and unlocks true continuous vibration.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -297,19 +297,19 @@ struct HapticsSettingsView: View {
             } header: {
                 Text("Elements")
             } footer: {
-                Text("Each element type has its own waveform — use Try to feel it, Edit to compose your own.")
+                Text("Each element type has its own waveform. Try plays it, Edit composes your own.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section("Quiet Modes") {
                 Toggle("Simple mode", isOn: $settings.simpleMode)
-                Text("Only the primary targets tick — result links and prominent labeled buttons — while incidental controls (three-dot menus, favicons, “Read more”, icons) stay silent. On web pages the browser extension makes the sharpest call.")
+                Text("Only primary targets tick: result links and prominent labeled buttons. Icon-only controls stay silent.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 Toggle("Only buttons in the focused window", isOn: $settings.focusedWindowButtonsOnly)
-                Text("Ignore everything except buttons in the window you're actively using. Overrides the choices above while on.")
+                Text("Overrides the choices above while on.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -425,7 +425,7 @@ struct VibrationSettingsView: View {
     }
 }
 
-/// Press and hold to run the actual vibration with the current settings —
+/// Press and hold to run the actual vibration with the current settings -
 /// the preview IS the real thing.
 private struct HoldToFeelButton: View {
     @EnvironmentObject private var settings: SettingsStore
@@ -493,52 +493,142 @@ struct KeyboardSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Haptic feedback for the keyboard", isOn: $settings.keyboardHapticsEnabled)
-                Text("Tick the trackpad as you type. Works anywhere — the tick comes from the trackpad, not the keyboard.")
+                Toggle("Keyboard haptics", isOn: $settings.keyboardHapticsEnabled)
+                Text("Tick the trackpad as you type.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section {
+            Section("Fire on") {
+                Toggle("Shortcuts (a key with ⌘, ⌃, or ⌥ held)", isOn: $settings.keyboardShortcuts)
                 Toggle("Every key", isOn: $settings.keyboardAllKeys)
-                Text(settings.keyboardAllKeys
-                     ? "Every keypress ticks."
-                     : "Only keyboard shortcuts tick — a key pressed with ⌘, ⌃, or ⌥ held.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Toggle("Also feel modifier keys (⌘ ⇧ ⌥ ⌃)", isOn: $settings.keyboardModifierKeys)
-                Text("Tick the moment a modifier key goes down on its own, so you can feel it engage.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .disabled(!settings.keyboardHapticsEnabled)
-
-            Section {
+                Toggle("Modifier keys on their own (⌘ ⇧ ⌥ ⌃)", isOn: $settings.keyboardModifierKeys)
                 HStack {
                     Text("Waveform")
                     Spacer()
                     WaveformControl(waveform: $settings.keyboardWaveform, accessibilityName: "Keyboard")
                 }
+            }
+
+            Section {
+                ForEach(settings.keyCombos) { combo in
+                    HStack {
+                        Text(combo.display)
+                            .font(.system(.body, design: .rounded).weight(.medium))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color(nsColor: .quaternarySystemFill), in: RoundedRectangle(cornerRadius: 6))
+                        Spacer()
+                        WaveformControl(waveform: waveformBinding(combo), accessibilityName: "Shortcut \(combo.display)")
+                        Button {
+                            settings.keyCombos.removeAll { $0.id == combo.id }
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("Remove \(combo.display)")
+                    }
+                }
+                ShortcutRecorder()
             } header: {
-                Text("Feel")
+                Text("Custom shortcuts")
             } footer: {
-                Text("Pick a preset or compose your own with Edit — the same waveforms the element haptics use.")
+                Text("Record any combination. Each one has its own waveform.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .disabled(!settings.keyboardHapticsEnabled)
 
             Section {
-                Label(
-                    "Tactile never records which keys you press — only that a key went down, so it can fire the haptic. Keyboard access is read-only and stays on your Mac.",
-                    systemImage: "lock.shield.fill"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                Label("Keys are compared on your Mac and discarded. Nothing is stored or sent.", systemImage: "lock.shield.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func waveformBinding(_ combo: KeyCombo) -> Binding<HapticWaveform> {
+        Binding(
+            get: {
+                settings.keyCombos.first(where: { $0.id == combo.id })?.waveform ?? combo.waveform
+            },
+            set: { newValue in
+                if let index = settings.keyCombos.firstIndex(where: { $0.id == combo.id }) {
+                    settings.keyCombos[index].waveform = newValue
+                }
+            }
+        )
+    }
+}
+
+/// Records one key combination: press Record, hold any modifiers, press a
+/// key, and the combo is set the moment you release it. Esc cancels.
+private struct ShortcutRecorder: View {
+    @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var controller: AppController
+
+    @State private var isRecording = false
+    @State private var monitor: Any?
+    @State private var pendingKeyCode: UInt16?
+    @State private var pendingModifiers: NSEvent.ModifierFlags = []
+
+    var body: some View {
+        HStack {
+            Button {
+                isRecording ? stop() : begin()
+            } label: {
+                Label(isRecording ? "Press a key combination…" : "Record Shortcut",
+                      systemImage: isRecording ? "record.circle.fill" : "plus")
+            }
+            if isRecording {
+                Text("Esc cancels")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .onDisappear { stop() }
+    }
+
+    private func begin() {
+        isRecording = true
+        controller.setKeyboardCaptureSuspended(true)
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { event in
+            let modifiers = event.modifierFlags.intersection(KeyboardMonitor.significantModifiers)
+            if event.type == .keyDown {
+                if event.keyCode == 53, modifiers.isEmpty {
+                    stop()
+                    return nil
+                }
+                pendingKeyCode = event.keyCode
+                pendingModifiers = modifiers
+                return nil
+            }
+            // Released the recorded key: the combo is set.
+            if let keyCode = pendingKeyCode, event.keyCode == keyCode {
+                commit(keyCode: keyCode, modifiers: pendingModifiers)
+                stop()
+            }
+            return nil
+        }
+    }
+
+    private func commit(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
+        settings.keyCombos.removeAll { $0.keyCode == keyCode && $0.modifiers == modifiers.rawValue }
+        settings.keyCombos.append(KeyCombo(
+            keyCode: keyCode,
+            modifiers: modifiers.rawValue,
+            display: KeyCombo.displayString(keyCode: keyCode, modifiers: modifiers),
+            waveform: settings.keyboardWaveform
+        ))
+    }
+
+    private func stop() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+        pendingKeyCode = nil
+        pendingModifiers = []
+        isRecording = false
+        controller.setKeyboardCaptureSuspended(false)
     }
 }
 
@@ -609,7 +699,7 @@ struct VisualAidsView: View {
             } header: {
                 Text("More aids")
             } footer: {
-                Text("Crosshair guides run full-screen hairlines through the cursor for locating the pointer at a glance. The name tag shows what's under the cursor (\u{201C}Save — Button\u{201D}). The ripple makes each haptic visible — useful with an external mouse or for anyone who can't feel the trackpad.")
+                Text("Crosshair guides locate the pointer at a glance. The name tag shows what's under the cursor (\u{201C}Save · Button\u{201D}). The ripple makes each haptic visible.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -688,7 +778,7 @@ private struct VisualAidPreview: View {
                         .position(x: x + 1, y: y - 1)
 
                     if settings.hoverCaptionEnabled, overSafe || overDanger {
-                        Text(overDanger ? "Delete — Button" : "Button — Button")
+                        Text(overDanger ? "Delete · Button" : "Button · Button")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 8)
@@ -802,7 +892,7 @@ struct SoundSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 } else {
-                    Text("Picking a sound plays it. Short sounds work best — any audio format macOS can play.")
+                    Text("Picking a sound plays it. Short sounds work best.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -838,7 +928,7 @@ struct SoundSettingsView: View {
         if let lastImported {
             settings.audioSoundName = lastImported
         }
-        importError = failed.isEmpty ? nil : "Couldn't play \(failed.joined(separator: ", ")) — not imported."
+        importError = failed.isEmpty ? nil : "Couldn't play \(failed.joined(separator: ", ")), not imported."
     }
 }
 
@@ -903,8 +993,8 @@ struct AboutView: View {
 
     private var versionText: String {
         let info = Bundle.main.infoDictionary
-        let short = info?["CFBundleShortVersionString"] as? String ?? "—"
-        let build = info?["CFBundleVersion"] as? String ?? "—"
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
         return "Version \(short) (\(build))"
     }
 

@@ -29,12 +29,12 @@ struct OnboardingView: View {
                 }
                 .keyboardShortcut(.defaultAction)
             } else {
-                Text("Tactile taps the trackpad's haptic motor whenever your cursor passes over something clickable — so you can feel the interface, not just see it.")
+                Text("Tactile taps the trackpad's haptic motor whenever your cursor passes over something clickable, so you can feel the interface, not just see it.")
                     .multilineTextAlignment(.center)
 
                 VStack(alignment: .leading, spacing: 10) {
                     Label("Tactile needs the Accessibility permission to know what is under your cursor.", systemImage: "accessibility")
-                    Label("Everything happens on your Mac. Tactile only looks at the type of element under the cursor — never at your content.", systemImage: "lock.shield")
+                    Label("Everything happens on your Mac. Tactile only looks at the type of element under the cursor, never at your content.", systemImage: "lock.shield")
                     Label("You can revoke the permission at any time in System Settings.", systemImage: "gearshape")
                 }
                 .font(.callout)
@@ -45,7 +45,7 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("1. Click the button below to open System Settings.")
                     Text("2. Find Tactile in the list and turn it on.")
-                    Text("3. Come back here — Tactile starts automatically.")
+                    Text("3. Come back here. Tactile starts automatically.")
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)

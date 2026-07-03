@@ -38,7 +38,7 @@ enum FeedbackCategory: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Singular, for the element caption visual aid ("Save — Button").
+    /// Singular, for the element caption visual aid ("Save - Button").
     var captionName: String {
         switch self {
         case .button: return "Button"
@@ -60,12 +60,12 @@ enum FeedbackCategory: String, CaseIterable, Identifiable {
         case .link: return "Hyperlinks in web pages and apps."
         case .toggle: return "Checkboxes, radio buttons, switches, and disclosure triangles."
         case .menuItem: return "Items inside open menus, plus pop-up and combo buttons."
-        case .menuBarItem: return "The menu bar at the top of the screen — the Apple menu, app menus, and status icons on the right."
-        case .dockItem: return "Icons in the Dock — apps, minimized windows, folders, and the Trash."
+        case .menuBarItem: return "The menu bar: Apple menu, app menus, and status icons."
+        case .dockItem: return "Dock icons: apps, minimized windows, folders, and the Trash."
         case .tab: return "Tab controls in windows and web pages."
         case .slider: return "Sliders and steppers."
         case .textField: return "Editable text fields and search fields."
-        case .genericPressable: return "Custom controls that report themselves as pressable, common in web and Electron apps."
+        case .genericPressable: return "Custom pressable controls, common in web and Electron apps."
         }
     }
 
@@ -158,7 +158,7 @@ struct FeedbackConfig {
     var keyboardWaveform: HapticWaveform
 }
 
-/// Everything user-configurable, as one Codable value — the unit of
+/// Everything user-configurable, as one Codable value - the unit of
 /// import/export and of saved profiles.
 struct SettingsSnapshot: Codable {
     var version = 1
@@ -207,9 +207,11 @@ struct SettingsSnapshot: Codable {
     var audioSoundName = "Pop"
     // Keyboard haptics (added post-v1, so Optional to keep old snapshots decodable).
     var keyboardHapticsEnabled: Bool? = false
+    var keyboardShortcuts: Bool? = true
     var keyboardAllKeys: Bool? = false
     var keyboardModifierKeys: Bool? = false
     var keyboardWaveform: HapticWaveform? = WaveformPreset.tap.waveform
+    var keyCombos: [KeyCombo]? = []
 }
 
 struct SettingsProfile: Codable, Identifiable {
@@ -251,8 +253,8 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(focusedWindowButtonsOnly, forKey: "focusedWindowButtonsOnly") }
     }
 
-    /// Simple mode: fire only on prominent primary targets — links, well-
-    /// labeled buttons — and skip incidental controls (three-dot menus,
+    /// Simple mode: fire only on prominent primary targets - links, well-
+    /// labeled buttons - and skip incidental controls (three-dot menus,
     /// favicons, "Read more", icons). On the web the extension picks the
     /// primary targets; elsewhere it's a prominence + label heuristic.
     @Published var simpleMode: Bool {
@@ -302,7 +304,7 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(crosshairWidth, forKey: "crosshairWidth") }
     }
 
-    /// Floating label naming the hovered element ("Save — Button").
+    /// Floating label naming the hovered element ("Save - Button").
     @Published var hoverCaptionEnabled: Bool {
         didSet { defaults.set(hoverCaptionEnabled, forKey: "hoverCaptionEnabled") }
     }
@@ -411,7 +413,12 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(keyboardHapticsEnabled, forKey: "keyboardHapticsEnabled") }
     }
 
-    /// Fire on every keypress; when off, only keyboard shortcuts (⌘/⌃/⌥) fire.
+    /// Fire on keyboard shortcuts (a key pressed with ⌘, ⌃, or ⌥ held).
+    @Published var keyboardShortcuts: Bool {
+        didSet { defaults.set(keyboardShortcuts, forKey: "keyboardShortcuts") }
+    }
+
+    /// Fire on every keypress.
     @Published var keyboardAllKeys: Bool {
         didSet { defaults.set(keyboardAllKeys, forKey: "keyboardAllKeys") }
     }
@@ -423,6 +430,11 @@ final class SettingsStore: ObservableObject {
 
     @Published var keyboardWaveform: HapticWaveform {
         didSet { setCodable(keyboardWaveform, forKey: "keyboardWaveform") }
+    }
+
+    /// User-recorded key combinations, each with its own waveform.
+    @Published var keyCombos: [KeyCombo] {
+        didSet { setCodable(keyCombos, forKey: "keyCombos") }
     }
 
     @Published var pollingHz: Double {
@@ -495,9 +507,11 @@ final class SettingsStore: ObservableObject {
         audioEnabled = defaults.object(forKey: "audioEnabled") as? Bool ?? false
         audioVolume = defaults.object(forKey: "audioVolume") as? Double ?? 0.5
         keyboardHapticsEnabled = defaults.object(forKey: "keyboardHapticsEnabled") as? Bool ?? false
+        keyboardShortcuts = defaults.object(forKey: "keyboardShortcuts") as? Bool ?? true
         keyboardAllKeys = defaults.object(forKey: "keyboardAllKeys") as? Bool ?? false
         keyboardModifierKeys = defaults.object(forKey: "keyboardModifierKeys") as? Bool ?? false
         keyboardWaveform = Self.codable(defaults, "keyboardWaveform") ?? WaveformPreset.tap.waveform
+        keyCombos = Self.codable(defaults, "keyCombos") ?? []
         pollingHz = defaults.object(forKey: "pollingHz") as? Double ?? 60
         noLagMode = defaults.object(forKey: "noLagMode") as? Bool ?? false
         profiles = Self.codable(defaults, "profiles") ?? []
@@ -580,9 +594,11 @@ final class SettingsStore: ObservableObject {
         snapshot.audioVolume = audioVolume
         snapshot.audioSoundName = audioSoundName
         snapshot.keyboardHapticsEnabled = keyboardHapticsEnabled
+        snapshot.keyboardShortcuts = keyboardShortcuts
         snapshot.keyboardAllKeys = keyboardAllKeys
         snapshot.keyboardModifierKeys = keyboardModifierKeys
         snapshot.keyboardWaveform = keyboardWaveform
+        snapshot.keyCombos = keyCombos
         return snapshot
     }
 
@@ -635,9 +651,11 @@ final class SettingsStore: ObservableObject {
         audioVolume = snapshot.audioVolume
         audioSoundName = snapshot.audioSoundName
         keyboardHapticsEnabled = snapshot.keyboardHapticsEnabled ?? false
+        keyboardShortcuts = snapshot.keyboardShortcuts ?? true
         keyboardAllKeys = snapshot.keyboardAllKeys ?? false
         keyboardModifierKeys = snapshot.keyboardModifierKeys ?? false
         keyboardWaveform = snapshot.keyboardWaveform ?? WaveformPreset.tap.waveform
+        keyCombos = snapshot.keyCombos ?? []
     }
 
     // MARK: - Codable persistence helpers

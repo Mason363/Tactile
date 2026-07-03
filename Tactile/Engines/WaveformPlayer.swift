@@ -7,7 +7,7 @@ import Foundation
 
 /// Plays a waveform's pulses through an engine with precise timing.
 /// Starting a new waveform cancels any pulses still pending from the last
-/// one — during fast sweeps the newest element always wins.
+/// one - during fast sweeps the newest element always wins.
 @MainActor
 final class WaveformPlayer {
     private var timers: [Timer] = []

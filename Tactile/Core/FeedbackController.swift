@@ -9,7 +9,7 @@ import QuartzCore
 
 /// Decides what a resolved element should feel like, and plays it.
 ///
-/// Feedback fires once per element *enter* — never continuously — and only
+/// Feedback fires once per element *enter* - never continuously - and only
 /// when the element's category is enabled, its app isn't excluded, the rate
 /// limit allows it, and any dwell delay has elapsed. What plays is a
 /// waveform chosen by context: the category's own waveform, the danger
@@ -25,10 +25,10 @@ final class FeedbackController {
 
     /// Tells the visual hover indicator what the cursor is over (and where,
     /// in accessibility coordinates), plus a short caption naming it
-    /// ("Save — Button"). Only called when the hovered element changes.
+    /// ("Save - Button"). Only called when the hovered element changes.
     var onHoverState: ((HoverKind, CGRect?, String?) -> Void)?
 
-    /// Fires with every haptic activation — drives the fire-flash visual
+    /// Fires with every haptic activation - drives the fire-flash visual
     /// echo, so feedback stays perceivable without a finger on the trackpad.
     var onFire: (() -> Void)?
 
@@ -86,8 +86,8 @@ final class FeedbackController {
 
     func handle(point: CGPoint, resolved: ResolvedElement?) {
         // Whether the cursor is still inside the fired frame. Bridge-reported
-        // frames (pid == nil) carry a little error — browser chrome offset,
-        // page zoom — so they get the same generous slack the bridge dedupe
+        // frames (pid == nil) carry a little error - browser chrome offset,
+        // page zoom - so they get the same generous slack the bridge dedupe
         // uses; clearing them on a 2px miss re-armed the control and doubled
         // feedback. The region itself is NOT cleared here: leaving a fired
         // fragment's frame while staying inside its enclosing control must
@@ -99,7 +99,7 @@ final class FeedbackController {
         guard let resolved else {
             // A transient hit-test failure while still inside the fired
             // control (common while web apps re-render on hover) is not an
-            // exit — keep the current feel.
+            // exit - keep the current feel.
             if pointInRegion { return }
             activeFireRegion = nil
             onSkipRegionUpdate?(Self.jitterBox(around: point))
@@ -121,13 +121,13 @@ final class FeedbackController {
 
         // Reject "clickable" elements that are clearly containers: Electron
         // and web apps mark window-sized groups as pressable, and treating
-        // one as a control both fires a bogus tick and — worse — caches a
+        // one as a control both fires a bogus tick and - worse - caches a
         // window-sized skip region that silences the whole app until the
         // cursor leaves it.
         let controlSized = resolved.frame.map(Self.isControlSized) ?? false
         let category = controlSized ? rawCategory : nil
 
-        // Clickable leaf elements can cache their whole frame — the cursor
+        // Clickable leaf elements can cache their whole frame - the cursor
         // can't reveal anything deeper inside them. Anything else (groups,
         // windows, text) only gets a small box around the cursor: containers
         // report frames that span their children, and caching those would
@@ -138,15 +138,15 @@ final class FeedbackController {
             onSkipRegionUpdate?(Self.jitterBox(around: point))
         }
 
-        // Same element as last time — nothing to do. This is what makes
+        // Same element as last time - nothing to do. This is what makes
         // feedback fire on enter (and exit) only.
         if let lastElement, CFEqual(lastElement, resolved.element) { return }
 
-        // The same control the last fire covered — its own label, an inert
+        // The same control the last fire covered - its own label, an inert
         // overlay, a re-rendered wrapper, a container spanning it, or the
         // control itself with its frame shifted by a hover animation: stay
         // quiet. The region grows to the union so a control absorbs ALL its
-        // fragments — when a small badge fires first and its enclosing tab
+        // fragments - when a small badge fires first and its enclosing tab
         // comes next (even after the cursor has moved past the badge's own
         // frame), the region becomes the whole tab, and every further
         // fragment inside it stays quiet too.
@@ -231,7 +231,7 @@ final class FeedbackController {
 
     /// Feedback driven by the Chrome extension instead of the accessibility
     /// tree. The extension reports the real DOM, so it reaches `<div>` controls
-    /// AX never sees, and it already emits one event per element enter — so
+    /// AX never sees, and it already emits one event per element enter - so
     /// this reuses the same waveform selection, playback, vibration, and
     /// hover-out as the AX path, just fed from semantics rather than an
     /// `AXUIElement`. AppController suppresses the AX path while this is hot, so
@@ -240,7 +240,7 @@ final class FeedbackController {
         let rect = message.cgRect
         log.debug("bridge msg type=\(message.type, privacy: .public) el=\(message.el ?? "-", privacy: .public) rect=\(rect.map(Self.geom) ?? "-", privacy: .public) inViewport=\(message.inViewport.map(String.init) ?? "-", privacy: .public)")
 
-        // Geometry sanity: a hover's rect must contain the pointer — the
+        // Geometry sanity: a hover's rect must contain the pointer - the
         // extension is claiming the cursor is over this element. When it
         // doesn't (an outdated extension build mis-converting viewport
         // coordinates: side panels, dev tools, page zoom), every rect is
@@ -264,7 +264,7 @@ final class FeedbackController {
             onHoverState?(.none, nil, nil)
             leaveCurrentElement(enteringFiringElement: false)
             lastElement = nil
-            // NO leave message may clear the fire region — ever. The region's
+            // NO leave message may clear the fire region - ever. The region's
             // lifecycle belongs to the accessibility path's real cursor
             // tracking (handle() clears it when the point actually leaves the
             // frame), which runs everywhere including browser chrome. Web
@@ -275,7 +275,7 @@ final class FeedbackController {
             return
         }
 
-        // The same control the last fire covered — whether that fire came
+        // The same control the last fire covered - whether that fire came
         // from this path or the accessibility path (both run concurrently
         // and report the same controls moments apart). One control, one
         // feel. Heavy overlap counts too: hover animations shift the frame
@@ -292,7 +292,7 @@ final class FeedbackController {
             return
         }
 
-        // Container-sized "controls" are wrappers, not targets — same sanity
+        // Container-sized "controls" are wrappers, not targets - same sanity
         // the accessibility path applies. (No rect means an older extension;
         // fail open.)
         if let rect, !Self.isControlSized(rect) {
@@ -340,7 +340,7 @@ final class FeedbackController {
             firedForCurrentElement = true
             activeFireRegion = firedRegion
             // Let the cursor monitor skip re-sampling inside the fired
-            // control — the accessibility path runs concurrently and doesn't
+            // control - the accessibility path runs concurrently and doesn't
             // need to re-resolve what the extension already identified.
             if let rect { onSkipRegionUpdate?(rect) }
             startVibrationIfEnabled()
@@ -349,11 +349,11 @@ final class FeedbackController {
 
     /// After a click the UI under the cursor usually changes (menus open,
     /// pages navigate), so the last fired control's *frame* no longer means
-    /// anything — forget it rather than suppress whatever appears there.
+    /// anything - forget it rather than suppress whatever appears there.
     /// Element identity is deliberately kept: if the click changed nothing,
     /// the same element resolving again must stay quiet, not re-fire.
     func invalidateAfterClick(at point: CGPoint) {
-        // Shrink — don't clear — the fire region to a small box at the click
+        // Shrink - don't clear - the fire region to a small box at the click
         // point. The clicked control re-renders with a fresh node identity in
         // web apps, but its frame still contains this point, so it reads as
         // the same control instead of a fresh tick. New UI appearing around
@@ -396,7 +396,7 @@ final class FeedbackController {
 
     /// Simple mode for web content: the extension decides which targets are
     /// primary (result-title links, prominent labeled controls) from the real
-    /// DOM, so here we just honor its flag. Fail *open* — if an older,
+    /// DOM, so here we just honor its flag. Fail *open* - if an older,
     /// not-yet-reloaded extension doesn't report `primary`, keep firing rather
     /// than going silent; the filtering starts once the extension is updated.
     private func bridgeSimpleOK(_ message: BridgeMessage) -> Bool {
@@ -410,17 +410,18 @@ final class FeedbackController {
         play(config.edgeWaveform, reason: "edge")
     }
 
-    /// Plays the keyboard waveform for a keypress. Independent of the hover
-    /// pipeline: its own player and a light debounce so a fast key-repeat
-    /// storm can't overwhelm the actuator, without touching the cursor rate
-    /// limit. Whether a given key qualifies (shortcut / any key / modifier) is
-    /// decided upstream in AppController from the settings.
-    func keyboardFire() {
+    /// Plays a waveform for a keypress: the given one (a recorded combo's
+    /// own) or the default keyboard waveform. Independent of the hover
+    /// pipeline: its own player and a light debounce so a fast key storm
+    /// can't overwhelm the actuator. Which keys qualify is decided upstream
+    /// in AppController from the settings.
+    func keyboardFire(_ waveform: HapticWaveform? = nil) {
         let now = CACurrentMediaTime()
         guard now - lastKeyTickTime >= 0.02 else { return }
         lastKeyTickTime = now
-        log.debug("fire reason=keyboard steps=\(self.config.keyboardWaveform.steps.count, privacy: .public)")
-        keyPlayer.play(config.keyboardWaveform, on: hapticEngine)
+        let chosen = waveform ?? config.keyboardWaveform
+        log.debug("fire reason=keyboard steps=\(chosen.steps.count, privacy: .public)")
+        keyPlayer.play(chosen, on: hapticEngine)
         onFire?()
     }
 
@@ -458,7 +459,7 @@ final class FeedbackController {
     }
 
     /// Reduces a resolution to what the visual indicator shows: nothing,
-    /// clickable, destructive, or disabled — plus the caption naming it.
+    /// clickable, destructive, or disabled - plus the caption naming it.
     private func emitHoverState(category: FeedbackCategory?, resolved: ResolvedElement) {
         guard let onHoverState else { return }
         guard let category, config.enabledCategories.contains(category), passesSimpleMode(category, resolved) else {
@@ -476,12 +477,12 @@ final class FeedbackController {
         onHoverState(kind, resolved.frame, Self.caption(category: category, label: resolved.title))
     }
 
-    /// "Save — Button", or just "Button" when the element has no usable name.
+    /// "Save - Button", or just "Button" when the element has no usable name.
     private static func caption(category: FeedbackCategory, label: String?) -> String {
         let name = (label ?? "").replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return category.captionName }
-        return "\(name.count > 40 ? String(name.prefix(39)) + "…" : name) — \(category.captionName)"
+        return "\(name.count > 40 ? String(name.prefix(39)) + "…" : name) · \(category.captionName)"
     }
 
     private func willFire(_ category: FeedbackCategory, resolved: ResolvedElement) -> Bool {
@@ -500,7 +501,7 @@ final class FeedbackController {
 
     /// Simple mode: cut the noise to the primary targets. Fire only for
     /// well-labeled, reasonably sized links, buttons, tabs, toggles, and menu
-    /// items — dropping icon-only controls (three-dot menus, favicons),
+    /// items - dropping icon-only controls (three-dot menus, favicons),
     /// sliders, text fields, and the ambiguous generic-pressable bucket. The
     /// browser extension makes a sharper call for web pages (see handleBridge);
     /// this is the best the accessibility tree alone allows.
@@ -512,7 +513,7 @@ final class FeedbackController {
         case .link, .button, .tab, .toggle, .menuItem, .menuBarItem, .dockItem:
             break
         }
-        // Must carry a real text label — this is what drops icon-only controls.
+        // Must carry a real text label - this is what drops icon-only controls.
         let label = (resolved.title ?? "").unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.count
         guard label >= 2 else { return false }
         // And not be a tiny control.
@@ -529,7 +530,7 @@ final class FeedbackController {
 
     /// Ends the current element, playing the hover-out waveform when
     /// configured. Skipped when the cursor lands directly on another firing
-    /// element — one transition, one feel.
+    /// element - one transition, one feel.
     private func leaveCurrentElement(enteringFiringElement: Bool) {
         dwellTimer?.invalidate()
         dwellTimer = nil
@@ -568,13 +569,13 @@ final class FeedbackController {
     // MARK: - Hover vibration
 
     /// A stream of rapid pulses reads as a continuous buzz. Pulses go
-    /// straight to the actuator with their own strength setting — the rate
+    /// straight to the actuator with their own strength setting - the rate
     /// limit governs discrete events, and the click sound stays out of it
     /// entirely. The vibration mode shapes the gaps between pulses.
     private func startVibrationIfEnabled() {
         guard config.vibrateOnHover else { return }
         stopVibration()
-        // With the actuator available, the buzz runs on its own thread — the
+        // With the actuator available, the buzz runs on its own thread - the
         // only way to hold pulse rates high enough (up to 250/sec) to feel
         // like one continuous vibration instead of a series of taps.
         if config.useEnhancedHaptics, let actuator = ActuatorHapticEngine.shared {
@@ -614,7 +615,7 @@ final class FeedbackController {
     }
 
     /// Minimal hysteresis for positions that didn't resolve to a clickable
-    /// element — absorbs jitter without hiding nearby controls.
+    /// element - absorbs jitter without hiding nearby controls.
     private static func jitterBox(around point: CGPoint) -> CGRect {
         CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)
     }
@@ -625,7 +626,7 @@ final class FeedbackController {
     }
 
     /// Geometry tolerance for a fire region. Bridge-reported frames
-    /// (pid == nil) are approximate — browser chrome offset, page zoom —
+    /// (pid == nil) are approximate - browser chrome offset, page zoom -
     /// so they need the same generous slack `roughlyNests` uses; treating
     /// them with accessibility-grade precision re-armed controls the bridge
     /// had already fired and doubled feedback.
@@ -640,7 +641,7 @@ final class FeedbackController {
     /// re-render mid-animation, so the same control routinely comes back
     /// with a shifted frame that no longer nests. Once the cursor has left
     /// the fired frame, only a *clickable, control-sized* enclosing frame
-    /// (the tab whose badge fired first) or heavy overlap still counts —
+    /// (the tab whose badge fired first) or heavy overlap still counts -
     /// an inert window-spanning container must end the feel, not extend it.
     private static func isSameControl(frame: CGRect?, category: FeedbackCategory?, region: FireRegion, pointInRegion: Bool) -> Bool {
         // A transient frame-less resolution inside the fired control is the

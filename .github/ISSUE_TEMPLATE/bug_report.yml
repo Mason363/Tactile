@@ -1,12 +1,12 @@
 name: Bug report
-description: Something isn't working right — a wrong or missing haptic, a crash, or unexpected behaviour.
+description: Something isn't working right, a wrong or missing haptic, a crash, or unexpected behaviour.
 title: "[Bug]: "
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to report this. A little detail goes a long way — especially the **app or website** where it happens, since Tactile reads each app's accessibility tree differently.
+        Thanks for taking the time to report this. A little detail goes a long way, especially the **app or website** where it happens, since Tactile reads each app's accessibility tree differently.
   - type: textarea
     id: what-happened
     attributes:

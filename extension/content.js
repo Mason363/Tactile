@@ -1,4 +1,4 @@
-// Tactile browser bridge — content script.
+// Tactile browser bridge - content script.
 //
 // Reports, per page, which clickable element the cursor is over, using the
 // real DOM. This closes the gap the macOS accessibility path fundamentally
@@ -9,14 +9,14 @@
 // Detection mirrors the app's ClickabilityClassifier (role -> category) and
 // ContextDetector (destructive-label -> danger) so web feels match native
 // feels. The script emits an event only when the hovered clickable's identity
-// changes — the browser already recomputes hover per frame, so this is nearly
-// free — matching Tactile's "one feel per enter" model.
+// changes - the browser already recomputes hover per frame, so this is nearly
+// free - matching Tactile's "one feel per enter" model.
 
 (() => {
   "use strict";
 
   // Version marker, readable from the page (and DevTools console) as
-  // document.documentElement.dataset.tactileBridge — the fastest way to
+  // document.documentElement.dataset.tactileBridge - the fastest way to
   // check which build of this script a tab is actually running.
   const BRIDGE_VERSION = "3";
   function stamp() {
@@ -44,7 +44,7 @@
   let lastCategory = null;
   // The last fired target's destination. Search-result cards repeat one
   // destination across several sibling links (title, quote, metadata row);
-  // crossing between them is still the same logical target — one feel.
+  // crossing between them is still the same logical target - one feel.
   let lastHref = null;
 
   function hrefOf(el) {
@@ -61,7 +61,7 @@
   }
 
   // Heavy mutual overlap (intersection over union) means the same control
-  // re-rendered or mid-hover-animation — sites translate and scale controls
+  // re-rendered or mid-hover-animation - sites translate and scale controls
   // on hover, so exact rect equality broke identity on every animation frame
   // and re-fired one control many times. Neighbouring controls share edges,
   // not area, so they never come close to this threshold.
@@ -75,7 +75,7 @@
   }
 
   // Categories whose label names an ACTION the control performs. Links and
-  // tabs are navigation — their text is content, so a commit message or
+  // tabs are navigation - their text is content, so a commit message or
   // headline reading "remove old docs" must not shake as destructive.
   const DANGER_CATEGORIES = new Set(["button", "menuItem", "toggle", "genericPressable"]);
 
@@ -99,7 +99,7 @@
   }
 
   // Simple mode's notion of a "primary" target: the main content links you
-  // actually navigate to, and prominent labeled controls — not the incidental
+  // actually navigate to, and prominent labeled controls - not the incidental
   // chrome around them (three-dot menus, favicons, "Read more", icon buttons).
   function isPrimary(el, category) {
     // Navigation is always primary: mode/tab rows, menu bars, nav sections.
@@ -113,7 +113,7 @@
       if (el.matches(headingSel) || el.closest(headingSel) || el.querySelector(headingSel)) {
         return true;
       }
-      // Otherwise, only substantial link text counts — this drops short
+      // Otherwise, only substantial link text counts - this drops short
       // utility links like "Read more", "Show more", and bare site names.
       return accessibleName(el).length >= 15;
     }
@@ -141,7 +141,7 @@
   }
 
   // Maps one element to a Tactile category, or null if it isn't a control.
-  // Returns { category, on } — `on` is checked/selected state or null.
+  // Returns { category, on } - `on` is checked/selected state or null.
   function categoryOf(el) {
     if (el.nodeType !== 1) return null;
     const tag = el.tagName ? el.tagName.toLowerCase() : "";
@@ -194,8 +194,8 @@
     // The accessibility-invisible case: a custom control with no role or
     // semantic tag, recognised only by its pointer cursor. `cursor` is an
     // INHERITED property, so it must originate on this element: otherwise
-    // every span, icon, and text line inside a role-less button — or inside
-    // a big clickable card — computes to `pointer` too, and one visual
+    // every span, icon, and text line inside a role-less button - or inside
+    // a big clickable card - computes to `pointer` too, and one visual
     // control becomes a swarm of fragment "controls" that each fire.
     // (The card case is the worst: the card itself is over the size ceiling
     // and rightly rejected, but its small text lines all pass.) Bounded to
@@ -212,7 +212,7 @@
     return null;
   }
 
-  // Whether the pointer cursor is inherited rather than the element's own —
+  // Whether the pointer cursor is inherited rather than the element's own -
   // the parent computing `pointer` too means the style cascades from above.
   function parentHasPointer(el) {
     const parent = el.parentElement;
@@ -224,7 +224,7 @@
   // Chrome exposes no API for the viewport's screen origin, and inferring it
   // from window metrics breaks whenever browser chrome isn't all at the top:
   // a side panel shifts the whole viewport right, dev tools shift it up, and
-  // page zoom scales everything — each error pushed every reported rect past
+  // page zoom scales everything - each error pushed every reported rect past
   // the app's cross-path tolerance, so the accessibility path stopped
   // recognising bridge fires as the same control and every control fired
   // twice (or more, on hover-churny pages). Real mouse events carry both
@@ -232,7 +232,7 @@
   //   origin = event.screen − event.client · zoom
   // and zoom itself comes from the screen/client distance ratio between
   // far-apart events. Rect error then scales with the cursor's distance to
-  // the element — practically zero during a hover — not with window layout.
+  // the element - practically zero during a hover - not with window layout.
   const ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
   let calibratedZoom = null;
   let viewportOrigin = null; // [x, y] of the viewport in screen points
@@ -296,7 +296,7 @@
   // Semantic matches (role or tag) win over cursor:pointer-only matches even
   // when the pointer match is deeper: cursor:pointer inherits into a control's
   // inner spans, and hover-reactive sites re-create those inner nodes on every
-  // mousemove — the semantic ancestor is the identity-stable element.
+  // mousemove - the semantic ancestor is the identity-stable element.
   function resolveClickable(start) {
     let el = start;
     let pointerMatch = null;
@@ -342,7 +342,7 @@
     });
   }
 
-  // Pointer is still in the page but not on a clickable — hand nothing to fire,
+  // Pointer is still in the page but not on a clickable - hand nothing to fire,
   // but keep the app suppressing its accessibility path for this page.
   function reportBlank() {
     if (lastEl === null && reportedInViewport) return;
@@ -371,7 +371,7 @@
       reportBlank();
       return;
     }
-    if (match.el === lastEl) return; // Same control — one feel per enter.
+    if (match.el === lastEl) return; // Same control - one feel per enter.
     // A different node with the same kind and (roughly) the same geometry is
     // the same control re-rendered under the cursor, not a new one. The rect
     // is re-remembered so identity tracks the control through an animation.
@@ -399,7 +399,7 @@
     if (event.relatedTarget !== null) return;
     // ...except when the hovered node was just REMOVED from the DOM (tooltip
     // unmount, hover re-render): that also reports null, but the pointer
-    // didn't go anywhere — treating it as an exit wiped the dedupe memory
+    // didn't go anywhere - treating it as an exit wiped the dedupe memory
     // and re-fired the control the pointer was still resting on.
     if (event.target && event.target.isConnected === false) return;
     reportExit();
@@ -421,9 +421,9 @@
     }
   }, true);
   // Belt-and-suspenders: leaving the top document's viewport. documentElement
-  // can be null at document_start, so guard it — the mouseout path above still
+  // can be null at document_start, so guard it - the mouseout path above still
   // reports the exit regardless. CRITICAL: mouseleave doesn't bubble, but a
-  // CAPTURE listener still sees every descendant's mouseleave — crossing from
+  // CAPTURE listener still sees every descendant's mouseleave - crossing from
   // a button's icon to its label fired a full "left the page" exit, wiping
   // the dedupe state and re-firing the same button once per child boundary
   // (the great multi-fire bug). Only the root's own mouseleave counts.

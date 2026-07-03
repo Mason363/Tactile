@@ -69,7 +69,7 @@ struct ContextSettingsView: View {
             } header: {
                 Text("Spatial")
             } footer: {
-                Text("Bump at the outer edges of the screen, and when crossing from one window into another — a physical map of your layout.")
+                Text("Bump at screen edges and when crossing between windows.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

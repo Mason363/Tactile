@@ -3,8 +3,8 @@
 //  Tactile
 //
 //  A canvas of real controls to hover while tuning. These are ordinary
-//  SwiftUI controls, so the actual pipeline — accessibility hit-testing and
-//  all — is what makes them tick.
+//  SwiftUI controls, so the actual pipeline - accessibility hit-testing and
+//  all - is what makes them tick.
 //
 //  Deliberately NOT built with Form/List: SwiftUI collapses buttons inside a
 //  List row into inert groups, so only the row would tick, not the buttons.
@@ -52,7 +52,7 @@ struct PlaygroundView: View {
                     }
                 }
 
-                card("Other Elements", note: "Sliders and text fields are off by default — turn them on in Haptics to feel these.") {
+                card("Other Elements", note: "Sliders and text fields are off by default. Turn them on in Haptics to feel these.") {
                     VStack(alignment: .leading, spacing: 12) {
                         Slider(value: $sliderValue) { Text("A slider") }
                             .frame(width: 260)
@@ -72,7 +72,7 @@ struct PlaygroundView: View {
         }
     }
 
-    /// A titled, softly-boxed group — the visual grouping a Form gave us,
+    /// A titled, softly-boxed group - the visual grouping a Form gave us,
     /// without the List that breaks the controls' accessibility.
     private func card<Content: View>(_ title: String, note: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {

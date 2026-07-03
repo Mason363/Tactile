@@ -6,8 +6,8 @@
 import AppKit
 import UniformTypeIdentifiers
 
-/// Optional quiet click sound so users on external mice — who can't feel the
-/// trackpad — still get hover feedback. Off by default.
+/// Optional quiet click sound so users on external mice - who can't feel the
+/// trackpad - still get hover feedback. Off by default.
 ///
 /// Sounds are either system sounds (by name) or user-imported audio files,
 /// stored in Application Support and referenced as "custom:<filename>".

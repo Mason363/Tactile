@@ -33,8 +33,8 @@ enum ClickabilityClassifier {
         case "AXOutlineRow":
             // Source-list / sidebar rows (Finder, Mail, System Settings, and
             // Tactile's own settings sidebar). They're selectable navigation
-            // targets but expose only AXShowDefaultUI/AXShowAlternateUI — no
-            // AXPress — so nothing else here would catch them. The hit-test
+            // targets but expose only AXShowDefaultUI/AXShowAlternateUI - no
+            // AXPress - so nothing else here would catch them. The hit-test
             // usually lands on the inert AXStaticText inside; the resolver's
             // ancestor recovery walks up to this row.
             return .button
@@ -66,12 +66,12 @@ enum ClickabilityClassifier {
         case "AXTextField", "AXTextArea":
             return .textField
         default:
-            // Custom controls — common in web and Electron apps — often use
+            // Custom controls - common in web and Electron apps - often use
             // generic roles but advertise a press action. Finder and other
             // file browsers don't: files, folders, sidebar shortcuts, and
             // desktop icons expose AXOpen (activate) instead of AXPress, so
             // treat that as clickable too. AXShowMenu is deliberately excluded
-            // — it sits on plenty of inert containers and would over-fire.
+            // - it sits on plenty of inert containers and would over-fire.
             let clickActions: Set<String> = ["AXPress", "AXOpen"]
             return actions.contains(where: clickActions.contains) ? .genericPressable : nil
         }

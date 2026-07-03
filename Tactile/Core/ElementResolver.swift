@@ -22,7 +22,7 @@ struct ResolvedElement {
     var title: String?
     /// Checked/selected state, fetched only for toggles and tabs.
     var isOn: Bool?
-    /// Destination URL, fetched only for links — used to treat sibling
+    /// Destination URL, fetched only for links - used to treat sibling
     /// fragments of one result (title, snippet, byline) as a single target.
     var url: String?
     /// Containing window, fetched only when window-boundary feedback is on.
@@ -71,7 +71,7 @@ final class ElementResolver {
     private var focusedMenuStamp: CFTimeInterval = 0
 
     /// Separate handle for focus queries: they run at most every 400ms, so
-    /// they can afford a longer timeout than per-sample hit-testing —
+    /// they can afford a longer timeout than per-sample hit-testing -
     /// Chromium regularly needs more than 50ms to answer them. The timeout
     /// is still kept tight (100ms): this query runs at the front of every
     /// hit-test on a cache miss, so its worst case bounds the whole
@@ -120,7 +120,7 @@ final class ElementResolver {
             if let onResolve {
                 // FIFO delivery (DispatchQueue.main, not unstructured Tasks):
                 // two resolutions arriving out of order would let a STALE
-                // position overwrite a newer one downstream — the dedupe
+                // position overwrite a newer one downstream - the dedupe
                 // state machine assumes samples arrive in cursor order.
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated { onResolve(point, resolved) }
@@ -137,8 +137,8 @@ final class ElementResolver {
         // even when it lands on our own process. But the *attribute* queries
         // below are serviced synchronously in-process for our own windows
         // (Sparkle's update dialog, the settings window), and touching an
-        // AppKit view off the main thread — e.g. an NSImageView still doing
-        // async image preparation for the app icon — trips an assertion and
+        // AppKit view off the main thread - e.g. an NSImageView still doing
+        // async image preparation for the app icon - trips an assertion and
         // aborts. So if the element belongs to us, redo the whole resolution
         // on the main thread before querying anything about it.
         var elementRef: AXUIElement?
@@ -170,11 +170,11 @@ final class ElementResolver {
             // A generic pressable is the weak catch-all bucket, wrong in two
             // opposite ways. It can be a *container* that merely advertises a
             // press action while holding the real controls inside it (SwiftUI
-            // Form rows, web and Electron wrappers) — prefer a more specific
+            // Form rows, web and Electron wrappers) - prefer a more specific
             // control under the cursor. And it can be a *fragment*: web
             // engines expose the press action on the descendants of a
             // clickable too, so the image and each text run inside a link or
-            // button all report as pressable islands of their own — firing
+            // button all report as pressable islands of their own - firing
             // once per island as the cursor crosses a single visual control.
             // Resolve those to the real control above; keep the element when
             // nothing better exists, so genuine <div>-style buttons still fire.
@@ -192,8 +192,8 @@ final class ElementResolver {
                     }
                     // The enclosing control is too big to fire (a whole card
                     // link): keep the fragment, but carry the card's
-                    // destination so all its fragments — image, title, text
-                    // lines — dedupe as one logical target downstream.
+                    // destination so all its fragments - image, title, text
+                    // lines - dedupe as one logical target downstream.
                     var enriched = enrich(resolved)
                     var urlRef: CFTypeRef?
                     if AXUIElementCopyAttributeValue(ancestor.element, "AXURL" as CFString, &urlRef) == .success {
@@ -210,7 +210,7 @@ final class ElementResolver {
         // can never wedge the queue for seconds.
         let deadline = CACurrentMediaTime() + Self.searchBudget
 
-        // The deepest element is often decoration inside the real control —
+        // The deepest element is often decoration inside the real control -
         // the text label of a button, a span inside a link. Look a few
         // ancestors up for a clickable element that still contains the cursor.
         if let ancestor = clickableAncestor(of: element, containing: point, deadline: deadline) {
@@ -236,8 +236,8 @@ final class ElementResolver {
         return enrich(resolved)
     }
 
-    /// Adds the detail attributes downstream features need — label text for
-    /// danger detection, checked/selected state, containing window — fetching
+    /// Adds the detail attributes downstream features need - label text for
+    /// danger detection, checked/selected state, containing window - fetching
     /// each only when something will actually use it.
     private func enrich(_ resolved: ResolvedElement) -> ResolvedElement {
         var enriched = resolved
@@ -287,7 +287,7 @@ final class ElementResolver {
     }
 
     /// Walks up to an enclosing AXTabGroup and finds the AXTabButton under
-    /// the cursor. Runs on its own budget — it only triggers inside tab
+    /// the cursor. Runs on its own budget - it only triggers inside tab
     /// strips, and the found tab's frame gets cached as the skip region.
     private func tabUnderCursor(near element: AXUIElement, point: CGPoint) -> ResolvedElement? {
         let deadline = CACurrentMediaTime() + 0.05
@@ -340,7 +340,7 @@ final class ElementResolver {
     }
 
     /// The process id owning an AX element. `AXUIElementGetPid` reads the pid
-    /// stored in the element — it doesn't message the target app — so it's
+    /// stored in the element - it doesn't message the target app - so it's
     /// safe on the background queue even for our own process.
     private func elementPID(_ element: AXUIElement) -> pid_t {
         var pid: pid_t = 0
@@ -357,7 +357,7 @@ final class ElementResolver {
     }
 
     /// First `maxValues` children only, fetched without materializing the
-    /// whole array — critical on web containers with thousands of children.
+    /// whole array - critical on web containers with thousands of children.
     private func boundedChildren(of element: AXUIElement, maxValues: CFIndex) -> [AXUIElement] {
         var valuesRef: CFArray?
         let error = AXUIElementCopyAttributeValues(element, "AXChildren" as CFString, 0, maxValues, &valuesRef)
@@ -392,7 +392,7 @@ final class ElementResolver {
 
     /// Categories that justify redirecting a pressable container to a child:
     /// unambiguous interactive controls. Text fields and sliders are left
-    /// out deliberately — a pressable row wrapping a text field is usually
+    /// out deliberately - a pressable row wrapping a text field is usually
     /// *about* the row, and redirecting there would silence it (those
     /// categories are off by default).
     private static let specificCategories: Set<FeedbackCategory> = [.button, .link, .toggle, .tab, .menuItem]
@@ -420,7 +420,7 @@ final class ElementResolver {
     }
 
     /// Walks up looking for an unambiguous control (button, link, toggle,
-    /// tab, menu item) that contains the point — the identity-stable owner
+    /// tab, menu item) that contains the point - the identity-stable owner
     /// of a pressable fragment. Generic wrappers along the way are walked
     /// through, structural roles end the walk.
     private func semanticAncestor(of element: AXUIElement, containing point: CGPoint, deadline: CFTimeInterval) -> ResolvedElement? {
@@ -458,7 +458,7 @@ final class ElementResolver {
             let parent = parentValue as! AXUIElement
 
             let resolved = makeResolved(parent)
-            // Structural roles end the walk — nothing clickable sits above.
+            // Structural roles end the walk - nothing clickable sits above.
             if ["AXWindow", "AXSheet", "AXDrawer", "AXApplication", "AXMenuBar"].contains(resolved.role) {
                 return nil
             }
@@ -506,7 +506,7 @@ final class ElementResolver {
         return (value as? NSNumber)?.intValue
     }
 
-    /// The menu container holding accessibility focus, if any — an open
+    /// The menu container holding accessibility focus, if any - an open
     /// popup keeps focus on itself or one of its items (roving focus follows
     /// the pointer). Cached briefly; returns nil when nothing menu-like is
     /// focused, which is the overwhelmingly common case.
@@ -527,7 +527,7 @@ final class ElementResolver {
         case "AXMenu":
             cachedFocusedMenu = focused
         case "AXMenuItem", "AXMenuButton":
-            // Climb to the enclosing AXMenu — it spans the whole popup
+            // Climb to the enclosing AXMenu - it spans the whole popup
             // including header chrome. Fall back to the immediate parent.
             var container = focused
             var best: AXUIElement?

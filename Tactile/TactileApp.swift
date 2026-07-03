@@ -20,7 +20,7 @@ struct TactileApp: App {
         } label: {
             // The braille-T mark, as a template image so the system tints it
             // for menu bar appearance. Built as an NSImage with isTemplate set
-            // explicitly — MenuBarExtra doesn't reliably honor the asset
+            // explicitly - MenuBarExtra doesn't reliably honor the asset
             // catalog's template intent. The slash glyph stays as the
             // at-a-glance signal that accessibility permission is missing.
             if controller.permission.isTrusted {
@@ -28,7 +28,7 @@ struct TactileApp: App {
                     .accessibilityLabel("Tactile")
             } else {
                 Image(systemName: "cursorarrow.slash")
-                    .accessibilityLabel("Tactile — accessibility access needed")
+                    .accessibilityLabel("Tactile, accessibility access needed")
             }
         }
         .menuBarExtraStyle(.menu)

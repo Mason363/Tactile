@@ -59,7 +59,7 @@ struct ProfilesView: View {
                     Button("Export Settings…") { exportSettings() }
                     Button("Import Settings…") { importSettings() }
                 }
-                Text("Settings travel as a JSON file — share your haptic setup or move it to another Mac.")
+                Text("Settings travel as a JSON file. Share your setup or move it to another Mac.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let ioMessage {
@@ -98,7 +98,7 @@ struct ProfilesView: View {
             settings.apply(snapshot)
             ioMessage = "Imported \(url.lastPathComponent)."
         } catch {
-            ioMessage = "Import failed — not a valid Tactile settings file."
+            ioMessage = "Import failed: not a valid Tactile settings file."
         }
     }
 }

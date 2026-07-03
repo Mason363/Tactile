@@ -19,7 +19,7 @@ enum ContextDetector {
     ]
 
     /// Categories whose label names an ACTION the control performs. Links
-    /// and tabs are navigation — their text is *content*, so a commit
+    /// and tabs are navigation - their text is *content*, so a commit
     /// message or headline reading "remove old docs" must not shake as a
     /// destructive control.
     private static let dangerCategories: Set<FeedbackCategory> = [

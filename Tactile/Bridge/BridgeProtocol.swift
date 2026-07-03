@@ -4,8 +4,8 @@
 //
 //  Shared contract between the browser extension, the native-messaging host
 //  relay, and the in-app socket server. Kept dependency-light (Foundation
-//  only) because it is used from the host relay, which runs before — and
-//  entirely without — AppKit.
+//  only) because it is used from the host relay, which runs before - and
+//  entirely without - AppKit.
 //
 
 import CoreGraphics
@@ -16,8 +16,8 @@ import Foundation
 /// identity changes, plus a throttled "ping" while the pointer moves so the
 /// app knows the page is instrumented (see AppController's hot-decay).
 struct BridgeMessage: Codable {
-    /// "hover" — the cursor is over a clickable; "leave" — it isn't;
-    /// "ping" — pointer is moving inside an instrumented page.
+    /// "hover" - the cursor is over a clickable; "leave" - it isn't;
+    /// "ping" - pointer is moving inside an instrumented page.
     var type: String
     /// FeedbackCategory raw value, present on "hover".
     var el: String?
@@ -37,7 +37,7 @@ struct BridgeMessage: Codable {
     /// Whether the cursor is inside the page. false means it moved to browser
     /// chrome or another window, so the accessibility path should take over.
     var inViewport: Bool?
-    /// The element's accessible name, present on "hover" — drives the
+    /// The element's accessible name, present on "hover" - drives the
     /// element-caption visual aid for web content.
     var label: String?
 
@@ -80,7 +80,7 @@ enum BridgeConstants {
     }
 
     /// `~/Library`. Resolved from the real home directory rather than a
-    /// sandbox container — Tactile is unsandboxed and the relay runs as a bare
+    /// sandbox container - Tactile is unsandboxed and the relay runs as a bare
     /// child of Chrome.
     private static var homeLibrary: URL {
         URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)

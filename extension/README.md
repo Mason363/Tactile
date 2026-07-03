@@ -1,8 +1,8 @@
 # Tactile Browser Bridge (Chrome)
 
 Reports the clickable element under the cursor from the **real DOM**, so web
-controls that never reach macOS accessibility — `<div>`/`<span>` buttons with a
-click handler and `cursor: pointer` but no ARIA role — can still be felt by
+controls that never reach macOS accessibility, `<div>`/`<span>` buttons with a
+click handler and `cursor: pointer` but no ARIA role, can still be felt by
 [Tactile](../). The accessibility path stays the universal fallback for every
 other browser and app; while Chrome is frontmost and the pointer is over page
 content, Tactile listens to this extension instead.
@@ -21,7 +21,7 @@ In Tactile → Settings → **Apps**, turn on **Browser integration (Chrome)** a
 approve the setup. That writes the native-messaging host manifest into
 `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`, pointing at
 the helper bundled inside Tactile.app. No extra macOS permission is needed for
-this path — it never touches the Accessibility API.
+this path, it never touches the Accessibility API.
 
 ## Test
 

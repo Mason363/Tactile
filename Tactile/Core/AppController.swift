@@ -39,7 +39,7 @@ final class AppController: ObservableObject {
     /// owner: the accessibility path always runs, and the two are deduped
     /// against each other by the shared fire region in FeedbackController
     /// (the extension reports each element's screen rect for exactly this).
-    /// Exclusive ownership was tried and abandoned — the extension sees less
+    /// Exclusive ownership was tried and abandoned - the extension sees less
     /// than the accessibility tree in places (oversized rows, uninstrumented
     /// chrome:// pages) and its service worker adds wake-up latency, so
     /// gating the AX path on it caused dead spots and lag.
@@ -74,16 +74,23 @@ final class AppController: ObservableObject {
         }
         cursorMonitor.onClick = { [weak self] point in
             // Clicks change the UI under the cursor (menus open, pages
-            // navigate) — cached frames stop meaning anything.
+            // navigate) - cached frames stop meaning anything.
             self?.feedback.invalidateAfterClick(at: point)
         }
 
-        // Keyboard haptics: fire for shortcuts always, for every key when the
-        // user opted in, and for modifier presses when enabled. The monitor
-        // never exposes which key — only whether one went down (see its docs).
-        keyboardMonitor.onKeyDown = { [weak self] shortcut in
+        // Keyboard haptics. A recorded combo wins and plays its own waveform;
+        // otherwise the shortcut / every-key / modifier settings decide.
+        // Events are compared and discarded; nothing is stored (see monitor docs).
+        keyboardMonitor.onKeyDown = { [weak self] keyCode, modifiers in
             guard let self else { return }
-            if self.settings.keyboardAllKeys || shortcut { self.feedback.keyboardFire() }
+            if let combo = self.settings.keyCombos.first(where: { $0.matches(keyCode: keyCode, modifiers: modifiers) }) {
+                self.feedback.keyboardFire(combo.waveform)
+                return
+            }
+            let isShortcut = !modifiers.intersection([.command, .option, .control]).isEmpty
+            if self.settings.keyboardAllKeys || (self.settings.keyboardShortcuts && isShortcut) {
+                self.feedback.keyboardFire()
+            }
         }
         keyboardMonitor.onModifierDown = { [weak self] in
             guard let self, self.settings.keyboardModifierKeys else { return }
@@ -98,7 +105,7 @@ final class AppController: ObservableObject {
             self.bridgeConnected = connected
             if !connected {
                 // A hard drop (extension crash/reload) can't send a "leave", so
-                // end any in-progress feel — otherwise a hover buzz would run on.
+                // end any in-progress feel - otherwise a hover buzz would run on.
                 self.feedback.reset()
             }
         }
@@ -166,7 +173,7 @@ final class AppController: ObservableObject {
         cursorMonitor.screenEdgesEnabled = settings.screenEdgesEnabled
         resolver.wantsWindow = settings.windowBoundsEnabled
         resolver.wantsFocusedWindow = settings.focusedWindowButtonsOnly
-        // The exclusion list may have just changed — re-evaluate the app
+        // The exclusion list may have just changed - re-evaluate the app
         // that's already frontmost, not only the next one to activate.
         let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         frontmostIsExcluded = bundleID.map { settings.excludedBundleIDs.contains($0) } ?? false
@@ -175,9 +182,8 @@ final class AppController: ObservableObject {
         updateKeyboardMonitor()
     }
 
-    /// Runs the keyboard tap only while the pipeline is active and the feature
-    /// is on — no key tap exists when keyboard haptics are off, for privacy
-    /// and cost.
+    /// Runs the key monitor only while the pipeline is active and the feature
+    /// is on. No key observation exists when keyboard haptics are off.
     private func updateKeyboardMonitor() {
         let shouldRun = isActive && settings.keyboardHapticsEnabled
         if shouldRun, !keyboardMonitor.isRunning {
@@ -185,6 +191,12 @@ final class AppController: ObservableObject {
         } else if !shouldRun, keyboardMonitor.isRunning {
             keyboardMonitor.stop()
         }
+    }
+
+    /// Quiets the key monitor while a shortcut recorder is capturing, so
+    /// recording a combo doesn't fire haptics mid-press.
+    func setKeyboardCaptureSuspended(_ suspended: Bool) {
+        keyboardMonitor.suspended = suspended
     }
 
     private func updateIndicator() {
@@ -251,7 +263,7 @@ final class AppController: ObservableObject {
         guard settings.browserIntegrationEnabled, frontmostIsBridgedBrowser, !frontmostIsExcluded else { return }
         // Hovers without a rect come from an outdated extension build. They
         // can't be deduped against the accessibility path, so rather than
-        // risk doubled feedback they're dropped — the AX path covers Chrome
+        // risk doubled feedback they're dropped - the AX path covers Chrome
         // fully on its own until the extension is reloaded.
         if message.type == "hover", message.cgRect == nil { return }
         guard message.type != "ping" else { return }

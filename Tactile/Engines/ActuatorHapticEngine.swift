@@ -11,8 +11,8 @@ import AppKit
 /// strengths, so Light/Standard/Firm become real intensity levels.
 ///
 /// Everything is resolved at runtime with dlopen/dlsym and probed once; if
-/// the framework, symbols, or actuator are missing — or break in a macOS
-/// update — `shared` is nil and callers fall back to the public engine.
+/// the framework, symbols, or actuator are missing - or break in a macOS
+/// update - `shared` is nil and callers fall back to the public engine.
 /// Nothing is linked at build time.
 @MainActor
 final class ActuatorHapticEngine: FeedbackEngine {
@@ -96,7 +96,7 @@ final class ActuatorHapticEngine: FeedbackEngine {
     // MARK: - Continuous buzz
 
     /// Runs the actuator fast enough that individual pulses blur into a
-    /// continuous vibration — main-thread timers can't hold a steady beat
+    /// continuous vibration - main-thread timers can't hold a steady beat
     /// below ~30ms, so the pulse loop gets its own thread with a hard floor
     /// of 4ms (250 pulses/sec). Power and thermals stay inside the driver's
     /// own limits: each call plays the same predefined waveform the system
