@@ -16,6 +16,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     case general
     case haptics
     case vibration
+    case keyboard
     case context
     case visual
     case sound
@@ -32,6 +33,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .general: return "General"
         case .haptics: return "Haptics"
         case .vibration: return "Vibration"
+        case .keyboard: return "Keyboard"
         case .context: return "Context"
         case .visual: return "Visual Aids"
         case .sound: return "Sound"
@@ -48,6 +50,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .general: return "Power, startup, and permission."
         case .haptics: return "Which elements you feel, and how each one feels."
         case .vibration: return "A continuous buzz while resting on an element."
+        case .keyboard: return "Feel keys and shortcuts as you type."
         case .context: return "Danger, state, hover-out, and spatial feel."
         case .visual: return "See what you feel: cursor ring, element highlight, crosshair, name tag, and fire ripple."
         case .sound: return "An audible click alongside the haptics."
@@ -64,6 +67,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .general: return "gearshape.fill"
         case .haptics: return "cursorarrow.rays"
         case .vibration: return "waveform.path"
+        case .keyboard: return "keyboard.fill"
         case .context: return "exclamationmark.triangle.fill"
         case .visual: return "eye.fill"
         case .sound: return "speaker.wave.2.fill"
@@ -80,6 +84,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .general: return .gray
         case .haptics: return .blue
         case .vibration: return .purple
+        case .keyboard: return .mint
         case .context: return .orange
         case .visual: return .green
         case .sound: return .pink
@@ -104,6 +109,7 @@ struct SettingsView: View {
                     sidebarRow(.general)
                     sidebarRow(.haptics)
                     sidebarRow(.vibration)
+                    sidebarRow(.keyboard)
                     sidebarRow(.context)
                     sidebarRow(.visual)
                     sidebarRow(.sound)
@@ -150,6 +156,7 @@ struct SettingsView: View {
         case .general: GeneralSettingsView()
         case .haptics: HapticsSettingsView()
         case .vibration: VibrationSettingsView()
+        case .keyboard: KeyboardSettingsView()
         case .context: ContextSettingsView()
         case .visual: VisualAidsView()
         case .sound: SoundSettingsView()
@@ -357,6 +364,8 @@ private extension FeedbackCategory {
         case .link: return "link"
         case .toggle: return "switch.2"
         case .menuItem: return "filemenu.and.selection"
+        case .menuBarItem: return "menubar.rectangle"
+        case .dockItem: return "dock.rectangle"
         case .tab: return "rectangle.topthird.inset.filled"
         case .slider: return "slider.horizontal.3"
         case .textField: return "character.cursor.ibeam"
@@ -473,6 +482,63 @@ private struct HoldToFeelButton: View {
         timer = nil
         step = 0
         ActuatorHapticEngine.shared?.stopBuzz()
+    }
+}
+
+// MARK: - Keyboard
+
+struct KeyboardSettingsView: View {
+    @EnvironmentObject private var settings: SettingsStore
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Haptic feedback for the keyboard", isOn: $settings.keyboardHapticsEnabled)
+                Text("Tick the trackpad as you type. Works anywhere — the tick comes from the trackpad, not the keyboard.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Every key", isOn: $settings.keyboardAllKeys)
+                Text(settings.keyboardAllKeys
+                     ? "Every keypress ticks."
+                     : "Only keyboard shortcuts tick — a key pressed with ⌘, ⌃, or ⌥ held.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Toggle("Also feel modifier keys (⌘ ⇧ ⌥ ⌃)", isOn: $settings.keyboardModifierKeys)
+                Text("Tick the moment a modifier key goes down on its own, so you can feel it engage.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .disabled(!settings.keyboardHapticsEnabled)
+
+            Section {
+                HStack {
+                    Text("Waveform")
+                    Spacer()
+                    WaveformControl(waveform: $settings.keyboardWaveform, accessibilityName: "Keyboard")
+                }
+            } header: {
+                Text("Feel")
+            } footer: {
+                Text("Pick a preset or compose your own with Edit — the same waveforms the element haptics use.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .disabled(!settings.keyboardHapticsEnabled)
+
+            Section {
+                Label(
+                    "Tactile never records which keys you press — only that a key went down, so it can fire the haptic. Keyboard access is read-only and stays on your Mac.",
+                    systemImage: "lock.shield.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 

@@ -19,6 +19,7 @@ final class AppController: ObservableObject {
     let permission = PermissionManager()
 
     private let cursorMonitor = CursorMonitor()
+    private let keyboardMonitor = KeyboardMonitor()
     private let resolver = ElementResolver()
     private let feedback: FeedbackController
     private let bridge = BrowserBridgeServer()
@@ -75,6 +76,18 @@ final class AppController: ObservableObject {
             // Clicks change the UI under the cursor (menus open, pages
             // navigate) — cached frames stop meaning anything.
             self?.feedback.invalidateAfterClick(at: point)
+        }
+
+        // Keyboard haptics: fire for shortcuts always, for every key when the
+        // user opted in, and for modifier presses when enabled. The monitor
+        // never exposes which key — only whether one went down (see its docs).
+        keyboardMonitor.onKeyDown = { [weak self] shortcut in
+            guard let self else { return }
+            if self.settings.keyboardAllKeys || shortcut { self.feedback.keyboardFire() }
+        }
+        keyboardMonitor.onModifierDown = { [weak self] in
+            guard let self, self.settings.keyboardModifierKeys else { return }
+            self.feedback.keyboardFire()
         }
 
         bridge.onEvent = { [weak self] message in
@@ -159,6 +172,19 @@ final class AppController: ObservableObject {
         frontmostIsExcluded = bundleID.map { settings.excludedBundleIDs.contains($0) } ?? false
         updateBridge()
         updateIndicator()
+        updateKeyboardMonitor()
+    }
+
+    /// Runs the keyboard tap only while the pipeline is active and the feature
+    /// is on — no key tap exists when keyboard haptics are off, for privacy
+    /// and cost.
+    private func updateKeyboardMonitor() {
+        let shouldRun = isActive && settings.keyboardHapticsEnabled
+        if shouldRun, !keyboardMonitor.isRunning {
+            keyboardMonitor.start()
+        } else if !shouldRun, keyboardMonitor.isRunning {
+            keyboardMonitor.stop()
+        }
     }
 
     private func updateIndicator() {
@@ -190,6 +216,7 @@ final class AppController: ObservableObject {
 
     private func stopPipeline() {
         cursorMonitor.stop()
+        keyboardMonitor.stop()
         feedback.reset()
         bridge.stop()
         indicator.hideAll()

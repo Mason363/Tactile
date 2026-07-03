@@ -43,13 +43,21 @@ enum ClickabilityClassifier {
         }
 
         switch role {
-        case "AXButton", "AXDockItem":
+        case "AXButton":
             return .button
+        case "AXDockItem":
+            // The Dock: app icons, minimized windows, folders, the Trash.
+            return .dockItem
+        case "AXMenuBarItem":
+            // The system menu bar at the top of the screen (Apple menu, app
+            // menus, and right-side status items). Items inside an *open*
+            // menu are AXMenuItem and stay under .menuItem.
+            return .menuBarItem
         case "AXLink":
             return .link
         case "AXCheckBox", "AXRadioButton", "AXDisclosureTriangle":
             return .toggle
-        case "AXMenuItem", "AXMenuBarItem", "AXMenuButton", "AXPopUpButton", "AXComboBox":
+        case "AXMenuItem", "AXMenuButton", "AXPopUpButton", "AXComboBox":
             return .menuItem
         case "AXTab":
             return .tab

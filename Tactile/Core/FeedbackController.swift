@@ -35,6 +35,10 @@ final class FeedbackController {
     private let haptics = SystemHapticEngine()
     private let audio = AudioFeedbackEngine()
     private let player = WaveformPlayer()
+    /// A separate player for keyboard ticks so typing never cancels an
+    /// in-flight hover waveform (and vice versa).
+    private let keyPlayer = WaveformPlayer()
+    private var lastKeyTickTime: CFTimeInterval = 0
 
     private var lastElement: AXUIElement?
     private var lastWindow: AXUIElement?
@@ -406,6 +410,20 @@ final class FeedbackController {
         play(config.edgeWaveform, reason: "edge")
     }
 
+    /// Plays the keyboard waveform for a keypress. Independent of the hover
+    /// pipeline: its own player and a light debounce so a fast key-repeat
+    /// storm can't overwhelm the actuator, without touching the cursor rate
+    /// limit. Whether a given key qualifies (shortcut / any key / modifier) is
+    /// decided upstream in AppController from the settings.
+    func keyboardFire() {
+        let now = CACurrentMediaTime()
+        guard now - lastKeyTickTime >= 0.02 else { return }
+        lastKeyTickTime = now
+        log.debug("fire reason=keyboard steps=\(self.config.keyboardWaveform.steps.count, privacy: .public)")
+        keyPlayer.play(config.keyboardWaveform, on: hapticEngine)
+        onFire?()
+    }
+
     /// Forgets the current element so re-entering it ticks again.
     func reset() {
         log.debug("reset")
@@ -418,6 +436,7 @@ final class FeedbackController {
         dwellTimer = nil
         stopVibration()
         player.cancel()
+        keyPlayer.cancel()
     }
 
     // MARK: - Waveform selection
@@ -490,7 +509,7 @@ final class FeedbackController {
         switch category {
         case .slider, .textField, .genericPressable:
             return false
-        case .link, .button, .tab, .toggle, .menuItem:
+        case .link, .button, .tab, .toggle, .menuItem, .menuBarItem, .dockItem:
             break
         }
         // Must carry a real text label — this is what drops icon-only controls.

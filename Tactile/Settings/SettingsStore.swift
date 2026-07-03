@@ -14,6 +14,8 @@ enum FeedbackCategory: String, CaseIterable, Identifiable {
     case link
     case toggle
     case menuItem
+    case menuBarItem
+    case dockItem
     case tab
     case slider
     case textField
@@ -27,6 +29,8 @@ enum FeedbackCategory: String, CaseIterable, Identifiable {
         case .link: return "Links"
         case .toggle: return "Checkboxes & Switches"
         case .menuItem: return "Menus & Pop-ups"
+        case .menuBarItem: return "Menu Bar"
+        case .dockItem: return "Dock"
         case .tab: return "Tabs"
         case .slider: return "Sliders"
         case .textField: return "Text Fields"
@@ -41,6 +45,8 @@ enum FeedbackCategory: String, CaseIterable, Identifiable {
         case .link: return "Link"
         case .toggle: return "Toggle"
         case .menuItem: return "Menu"
+        case .menuBarItem: return "Menu bar"
+        case .dockItem: return "Dock"
         case .tab: return "Tab"
         case .slider: return "Slider"
         case .textField: return "Text field"
@@ -53,7 +59,9 @@ enum FeedbackCategory: String, CaseIterable, Identifiable {
         case .button: return "Push buttons, toolbar buttons, and window controls."
         case .link: return "Hyperlinks in web pages and apps."
         case .toggle: return "Checkboxes, radio buttons, switches, and disclosure triangles."
-        case .menuItem: return "Menu items, menu bar items, and pop-up buttons."
+        case .menuItem: return "Items inside open menus, plus pop-up and combo buttons."
+        case .menuBarItem: return "The menu bar at the top of the screen — the Apple menu, app menus, and status icons on the right."
+        case .dockItem: return "Icons in the Dock — apps, minimized windows, folders, and the Trash."
         case .tab: return "Tab controls in windows and web pages."
         case .slider: return "Sliders and steppers."
         case .textField: return "Editable text fields and search fields."
@@ -147,6 +155,7 @@ struct FeedbackConfig {
     var audioEnabled: Bool
     var audioVolume: Double
     var audioSoundName: String
+    var keyboardWaveform: HapticWaveform
 }
 
 /// Everything user-configurable, as one Codable value — the unit of
@@ -196,6 +205,11 @@ struct SettingsSnapshot: Codable {
     var audioEnabled = false
     var audioVolume = 0.5
     var audioSoundName = "Pop"
+    // Keyboard haptics (added post-v1, so Optional to keep old snapshots decodable).
+    var keyboardHapticsEnabled: Bool? = false
+    var keyboardAllKeys: Bool? = false
+    var keyboardModifierKeys: Bool? = false
+    var keyboardWaveform: HapticWaveform? = WaveformPreset.tap.waveform
 }
 
 struct SettingsProfile: Codable, Identifiable {
@@ -392,6 +406,25 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(audioVolume, forKey: "audioVolume") }
     }
 
+    /// Keyboard haptics: tick the trackpad as you type. Off by default.
+    @Published var keyboardHapticsEnabled: Bool {
+        didSet { defaults.set(keyboardHapticsEnabled, forKey: "keyboardHapticsEnabled") }
+    }
+
+    /// Fire on every keypress; when off, only keyboard shortcuts (⌘/⌃/⌥) fire.
+    @Published var keyboardAllKeys: Bool {
+        didSet { defaults.set(keyboardAllKeys, forKey: "keyboardAllKeys") }
+    }
+
+    /// Also fire when a modifier key (⌘⇧⌥⌃) is pressed on its own.
+    @Published var keyboardModifierKeys: Bool {
+        didSet { defaults.set(keyboardModifierKeys, forKey: "keyboardModifierKeys") }
+    }
+
+    @Published var keyboardWaveform: HapticWaveform {
+        didSet { setCodable(keyboardWaveform, forKey: "keyboardWaveform") }
+    }
+
     @Published var pollingHz: Double {
         didSet { defaults.set(pollingHz, forKey: "pollingHz") }
     }
@@ -461,6 +494,10 @@ final class SettingsStore: ObservableObject {
         audioSoundName = defaults.string(forKey: "audioSoundName") ?? "Pop"
         audioEnabled = defaults.object(forKey: "audioEnabled") as? Bool ?? false
         audioVolume = defaults.object(forKey: "audioVolume") as? Double ?? 0.5
+        keyboardHapticsEnabled = defaults.object(forKey: "keyboardHapticsEnabled") as? Bool ?? false
+        keyboardAllKeys = defaults.object(forKey: "keyboardAllKeys") as? Bool ?? false
+        keyboardModifierKeys = defaults.object(forKey: "keyboardModifierKeys") as? Bool ?? false
+        keyboardWaveform = Self.codable(defaults, "keyboardWaveform") ?? WaveformPreset.tap.waveform
         pollingHz = defaults.object(forKey: "pollingHz") as? Double ?? 60
         noLagMode = defaults.object(forKey: "noLagMode") as? Bool ?? false
         profiles = Self.codable(defaults, "profiles") ?? []
@@ -492,7 +529,8 @@ final class SettingsStore: ObservableObject {
             useEnhancedHaptics: useEnhancedHaptics,
             audioEnabled: audioEnabled,
             audioVolume: audioVolume,
-            audioSoundName: audioSoundName
+            audioSoundName: audioSoundName,
+            keyboardWaveform: keyboardWaveform
         )
     }
 
@@ -541,6 +579,10 @@ final class SettingsStore: ObservableObject {
         snapshot.audioEnabled = audioEnabled
         snapshot.audioVolume = audioVolume
         snapshot.audioSoundName = audioSoundName
+        snapshot.keyboardHapticsEnabled = keyboardHapticsEnabled
+        snapshot.keyboardAllKeys = keyboardAllKeys
+        snapshot.keyboardModifierKeys = keyboardModifierKeys
+        snapshot.keyboardWaveform = keyboardWaveform
         return snapshot
     }
 
@@ -592,6 +634,10 @@ final class SettingsStore: ObservableObject {
         audioEnabled = snapshot.audioEnabled
         audioVolume = snapshot.audioVolume
         audioSoundName = snapshot.audioSoundName
+        keyboardHapticsEnabled = snapshot.keyboardHapticsEnabled ?? false
+        keyboardAllKeys = snapshot.keyboardAllKeys ?? false
+        keyboardModifierKeys = snapshot.keyboardModifierKeys ?? false
+        keyboardWaveform = snapshot.keyboardWaveform ?? WaveformPreset.tap.waveform
     }
 
     // MARK: - Codable persistence helpers
