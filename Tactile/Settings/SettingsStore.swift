@@ -34,6 +34,20 @@ enum FeedbackCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Singular, for the element caption visual aid ("Save — Button").
+    var captionName: String {
+        switch self {
+        case .button: return "Button"
+        case .link: return "Link"
+        case .toggle: return "Toggle"
+        case .menuItem: return "Menu"
+        case .tab: return "Tab"
+        case .slider: return "Slider"
+        case .textField: return "Text field"
+        case .genericPressable: return "Clickable"
+        }
+    }
+
     var explanation: String {
         switch self {
         case .button: return "Push buttons, toolbar buttons, and window controls."
@@ -150,7 +164,14 @@ struct SettingsSnapshot: Codable {
     var browserIntegrationEnabled: Bool? = false
     var hoverCircleEnabled: Bool? = false
     var hoverCircleDiameter: Double? = 22
+    var hoverCircleFilled: Bool? = false
+    var hoverCircleStrokeWidth: Double? = 3
     var elementHighlightEnabled: Bool? = false
+    var elementHighlightWidth: Double? = 3
+    var crosshairEnabled: Bool? = false
+    var crosshairWidth: Double? = 2
+    var hoverCaptionEnabled: Bool? = false
+    var fireFlashEnabled: Bool? = false
     var clickableColorHex: String? = "#34C759"
     var dangerColorHex: String? = "#FF3B30"
     var rateLimitMs: Double = 50
@@ -161,7 +182,7 @@ struct SettingsSnapshot: Codable {
     var exitWaveform = WaveformPreset.lightTap.waveform
     var dangerEnabled = true
     var dangerWaveform = WaveformPreset.shake.waveform
-    var stateAware = true
+    var stateAware = false
     var feelDisabled = false
     var screenEdgesEnabled = false
     var edgeWaveform = WaveformPreset.firmTap.waveform
@@ -242,8 +263,39 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(hoverCircleDiameter, forKey: "hoverCircleDiameter") }
     }
 
+    @Published var hoverCircleFilled: Bool {
+        didSet { defaults.set(hoverCircleFilled, forKey: "hoverCircleFilled") }
+    }
+
+    @Published var hoverCircleStrokeWidth: Double {
+        didSet { defaults.set(hoverCircleStrokeWidth, forKey: "hoverCircleStrokeWidth") }
+    }
+
     @Published var elementHighlightEnabled: Bool {
         didSet { defaults.set(elementHighlightEnabled, forKey: "elementHighlightEnabled") }
+    }
+
+    @Published var elementHighlightWidth: Double {
+        didSet { defaults.set(elementHighlightWidth, forKey: "elementHighlightWidth") }
+    }
+
+    /// Full-screen hairlines through the cursor, for locating the pointer.
+    @Published var crosshairEnabled: Bool {
+        didSet { defaults.set(crosshairEnabled, forKey: "crosshairEnabled") }
+    }
+
+    @Published var crosshairWidth: Double {
+        didSet { defaults.set(crosshairWidth, forKey: "crosshairWidth") }
+    }
+
+    /// Floating label naming the hovered element ("Save — Button").
+    @Published var hoverCaptionEnabled: Bool {
+        didSet { defaults.set(hoverCaptionEnabled, forKey: "hoverCaptionEnabled") }
+    }
+
+    /// A brief expanding ripple at the cursor whenever a haptic fires.
+    @Published var fireFlashEnabled: Bool {
+        didSet { defaults.set(fireFlashEnabled, forKey: "fireFlashEnabled") }
     }
 
     @Published var clickableColorHex: String {
@@ -379,7 +431,14 @@ final class SettingsStore: ObservableObject {
         browserIntegrationEnabled = defaults.object(forKey: "browserIntegrationEnabled") as? Bool ?? false
         hoverCircleEnabled = defaults.object(forKey: "hoverCircleEnabled") as? Bool ?? false
         hoverCircleDiameter = defaults.object(forKey: "hoverCircleDiameter") as? Double ?? 22
+        hoverCircleFilled = defaults.object(forKey: "hoverCircleFilled") as? Bool ?? false
+        hoverCircleStrokeWidth = defaults.object(forKey: "hoverCircleStrokeWidth") as? Double ?? 3
         elementHighlightEnabled = defaults.object(forKey: "elementHighlightEnabled") as? Bool ?? false
+        elementHighlightWidth = defaults.object(forKey: "elementHighlightWidth") as? Double ?? 3
+        crosshairEnabled = defaults.object(forKey: "crosshairEnabled") as? Bool ?? false
+        crosshairWidth = defaults.object(forKey: "crosshairWidth") as? Double ?? 2
+        hoverCaptionEnabled = defaults.object(forKey: "hoverCaptionEnabled") as? Bool ?? false
+        fireFlashEnabled = defaults.object(forKey: "fireFlashEnabled") as? Bool ?? false
         clickableColorHex = defaults.string(forKey: "clickableColorHex") ?? "#34C759"
         dangerColorHex = defaults.string(forKey: "dangerColorHex") ?? "#FF3B30"
         rateLimitMs = defaults.object(forKey: "rateLimitMs") as? Double ?? 50
@@ -388,7 +447,7 @@ final class SettingsStore: ObservableObject {
         exitWaveform = Self.codable(defaults, "exitWaveform") ?? WaveformPreset.lightTap.waveform
         dangerEnabled = defaults.object(forKey: "dangerEnabled") as? Bool ?? true
         dangerWaveform = Self.codable(defaults, "dangerWaveform") ?? WaveformPreset.shake.waveform
-        stateAware = defaults.object(forKey: "stateAware") as? Bool ?? true
+        stateAware = defaults.object(forKey: "stateAware") as? Bool ?? false
         feelDisabled = defaults.object(forKey: "feelDisabled") as? Bool ?? false
         screenEdgesEnabled = defaults.object(forKey: "screenEdgesEnabled") as? Bool ?? false
         edgeWaveform = Self.codable(defaults, "edgeWaveform") ?? WaveformPreset.firmTap.waveform
@@ -450,7 +509,14 @@ final class SettingsStore: ObservableObject {
         snapshot.browserIntegrationEnabled = browserIntegrationEnabled
         snapshot.hoverCircleEnabled = hoverCircleEnabled
         snapshot.hoverCircleDiameter = hoverCircleDiameter
+        snapshot.hoverCircleFilled = hoverCircleFilled
+        snapshot.hoverCircleStrokeWidth = hoverCircleStrokeWidth
         snapshot.elementHighlightEnabled = elementHighlightEnabled
+        snapshot.elementHighlightWidth = elementHighlightWidth
+        snapshot.crosshairEnabled = crosshairEnabled
+        snapshot.crosshairWidth = crosshairWidth
+        snapshot.hoverCaptionEnabled = hoverCaptionEnabled
+        snapshot.fireFlashEnabled = fireFlashEnabled
         snapshot.clickableColorHex = clickableColorHex
         snapshot.dangerColorHex = dangerColorHex
         snapshot.rateLimitMs = rateLimitMs
@@ -494,7 +560,14 @@ final class SettingsStore: ObservableObject {
         browserIntegrationEnabled = snapshot.browserIntegrationEnabled ?? false
         hoverCircleEnabled = snapshot.hoverCircleEnabled ?? false
         hoverCircleDiameter = snapshot.hoverCircleDiameter ?? 22
+        hoverCircleFilled = snapshot.hoverCircleFilled ?? false
+        hoverCircleStrokeWidth = snapshot.hoverCircleStrokeWidth ?? 3
         elementHighlightEnabled = snapshot.elementHighlightEnabled ?? false
+        elementHighlightWidth = snapshot.elementHighlightWidth ?? 3
+        crosshairEnabled = snapshot.crosshairEnabled ?? false
+        crosshairWidth = snapshot.crosshairWidth ?? 2
+        hoverCaptionEnabled = snapshot.hoverCaptionEnabled ?? false
+        fireFlashEnabled = snapshot.fireFlashEnabled ?? false
         clickableColorHex = snapshot.clickableColorHex ?? "#34C759"
         dangerColorHex = snapshot.dangerColorHex ?? "#FF3B30"
         rateLimitMs = snapshot.rateLimitMs

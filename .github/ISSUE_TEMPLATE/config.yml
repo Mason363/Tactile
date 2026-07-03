@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: ☕ Buy Mason a coffee
+    url: https://buymeacoffee.com/masonchen
+    about: Tactile is free and open source. If it helps you, a coffee keeps it going.
+  - name: 💬 Ask a question or say hello
+    url: https://github.com/Mason363/Tactile/discussions
+    about: For usage questions and general chat that aren't bugs or feature requests.

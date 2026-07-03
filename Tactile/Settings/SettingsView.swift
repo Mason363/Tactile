@@ -23,6 +23,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     case apps
     case profiles
     case playground
+    case about
 
     var id: String { rawValue }
 
@@ -38,6 +39,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .apps: return "Apps & Browser"
         case .profiles: return "Profiles"
         case .playground: return "Playground"
+        case .about: return "About"
         }
     }
 
@@ -47,12 +49,13 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .haptics: return "Which elements you feel, and how each one feels."
         case .vibration: return "A continuous buzz while resting on an element."
         case .context: return "Danger, state, hover-out, and spatial feel."
-        case .visual: return "See what you feel: a cursor circle and element highlight."
+        case .visual: return "See what you feel: cursor ring, element highlight, crosshair, name tag, and fire ripple."
         case .sound: return "An audible click alongside the haptics."
         case .performance: return "Responsiveness and resource trade-offs."
         case .apps: return "Where Tactile stays quiet, and the Chrome integration."
         case .profiles: return "Save, switch, and share complete setups."
         case .playground: return "Real controls to try your setup on."
+        case .about: return "Version, updates, feedback, and credits."
         }
     }
 
@@ -68,6 +71,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .apps: return "macwindow.on.rectangle"
         case .profiles: return "person.crop.rectangle.stack.fill"
         case .playground: return "hand.point.up.left.fill"
+        case .about: return "info.circle.fill"
         }
     }
 
@@ -83,6 +87,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .apps: return .indigo
         case .profiles: return .brown
         case .playground: return .cyan
+        case .about: return Color(nsColor: .systemGray)
         }
     }
 }
@@ -110,6 +115,9 @@ struct SettingsView: View {
                 }
                 Section("Try It") {
                     sidebarRow(.playground)
+                }
+                Section {
+                    sidebarRow(.about)
                 }
             }
             .navigationSplitViewColumnWidth(190)
@@ -149,6 +157,7 @@ struct SettingsView: View {
         case .apps: AppExclusionView()
         case .profiles: ProfilesView()
         case .playground: PlaygroundView()
+        case .about: AboutView()
         }
     }
 }
@@ -481,10 +490,10 @@ struct VisualAidsView: View {
                     .listRowInsets(EdgeInsets())
             }
 
-            Section {
-                Toggle("Colored circle under the cursor", isOn: $settings.hoverCircleEnabled)
+            Section("Cursor ring") {
+                Toggle("Ring around the cursor", isOn: $settings.hoverCircleEnabled)
                 LabeledSlider(
-                    title: "Circle size",
+                    title: "Ring size",
                     value: $settings.hoverCircleDiameter,
                     range: 12...44,
                     step: 2,
@@ -492,10 +501,49 @@ struct VisualAidsView: View {
                     caption: nil
                 )
                 .disabled(!settings.hoverCircleEnabled)
+                LabeledSlider(
+                    title: "Outline thickness",
+                    value: $settings.hoverCircleStrokeWidth,
+                    range: 1...8,
+                    step: 0.5,
+                    format: { String(format: "%.1f pt", $0) },
+                    caption: nil
+                )
+                .disabled(!settings.hoverCircleEnabled || settings.hoverCircleFilled)
+                Toggle("Fill the ring", isOn: $settings.hoverCircleFilled)
+                    .disabled(!settings.hoverCircleEnabled)
+            }
 
+            Section("Element highlight") {
                 Toggle("Highlight the hovered element", isOn: $settings.elementHighlightEnabled)
+                LabeledSlider(
+                    title: "Highlight thickness",
+                    value: $settings.elementHighlightWidth,
+                    range: 1...8,
+                    step: 0.5,
+                    format: { String(format: "%.1f pt", $0) },
+                    caption: nil
+                )
+                .disabled(!settings.elementHighlightEnabled)
+            }
+
+            Section {
+                Toggle("Crosshair guides", isOn: $settings.crosshairEnabled)
+                LabeledSlider(
+                    title: "Guide thickness",
+                    value: $settings.crosshairWidth,
+                    range: 1...6,
+                    step: 0.5,
+                    format: { String(format: "%.1f pt", $0) },
+                    caption: nil
+                )
+                .disabled(!settings.crosshairEnabled)
+                Toggle("Name the hovered element", isOn: $settings.hoverCaptionEnabled)
+                Toggle("Flash a ripple when haptics fire", isOn: $settings.fireFlashEnabled)
+            } header: {
+                Text("More aids")
             } footer: {
-                Text("The circle follows the cursor and takes the color of what's underneath; the highlight outlines the element's whole clickable area.")
+                Text("Crosshair guides run full-screen hairlines through the cursor for locating the pointer at a glance. The name tag shows what's under the cursor (\u{201C}Save — Button\u{201D}). The ripple makes each haptic visible — useful with an external mouse or for anyone who can't feel the trackpad.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -538,13 +586,33 @@ private struct VisualAidPreview: View {
                 let color: Color = overDanger ? dangerColor : (overSafe ? clickableColor : .gray.opacity(0.6))
 
                 ZStack {
+                    if settings.crosshairEnabled {
+                        Rectangle().fill(color.opacity(0.5))
+                            .frame(width: w, height: settings.crosshairWidth)
+                            .position(x: w / 2, y: y)
+                        Rectangle().fill(color.opacity(0.5))
+                            .frame(width: settings.crosshairWidth, height: geo.size.height)
+                            .position(x: x, y: geo.size.height / 2)
+                    }
+
                     sample("Button", frame: safeFrame, highlighted: overSafe, color: clickableColor)
                     sample("Delete", frame: dangerFrame, highlighted: overDanger, color: dangerColor)
 
+                    if settings.fireFlashEnabled, overSafe || overDanger {
+                        // Ripple keyed to entering a control, like the real echo.
+                        let phase = (t * 0.7).truncatingRemainder(dividingBy: 1)
+                        Circle()
+                            .stroke(color, lineWidth: 2.5)
+                            .frame(width: settings.hoverCircleDiameter * (1 + phase),
+                                   height: settings.hoverCircleDiameter * (1 + phase))
+                            .opacity(0.8 * (1 - phase))
+                            .position(x: x, y: y)
+                    }
+
                     if settings.hoverCircleEnabled {
                         Circle()
-                            .fill(color.opacity(0.55))
-                            .overlay(Circle().stroke(color, lineWidth: 1.5))
+                            .fill(settings.hoverCircleFilled ? color.opacity(0.55) : .clear)
+                            .overlay(Circle().stroke(color, lineWidth: settings.hoverCircleFilled ? 1.5 : settings.hoverCircleStrokeWidth))
                             .frame(width: settings.hoverCircleDiameter, height: settings.hoverCircleDiameter)
                             .position(x: x, y: y)
                     }
@@ -553,7 +621,18 @@ private struct VisualAidPreview: View {
                         .font(.system(size: 13))
                         .position(x: x + 1, y: y - 1)
 
-                    if !settings.hoverCircleEnabled && !settings.elementHighlightEnabled {
+                    if settings.hoverCaptionEnabled, overSafe || overDanger {
+                        Text(overDanger ? "Delete — Button" : "Button — Button")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(.black.opacity(0.78)))
+                            .position(x: x + 14, y: y + 24)
+                    }
+
+                    if !settings.hoverCircleEnabled && !settings.elementHighlightEnabled
+                        && !settings.crosshairEnabled && !settings.hoverCaptionEnabled && !settings.fireFlashEnabled {
                         Text("Turn on an aid below to preview it")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -574,8 +653,11 @@ private struct VisualAidPreview: View {
             .overlay {
                 if settings.elementHighlightEnabled && highlighted {
                     RoundedRectangle(cornerRadius: 7)
-                        .stroke(color, lineWidth: 3)
-                        .padding(-3)
+                        .stroke(color.opacity(0.28), lineWidth: settings.elementHighlightWidth + 5)
+                        .padding(-CGFloat(settings.elementHighlightWidth))
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(color, lineWidth: settings.elementHighlightWidth)
+                        .padding(-CGFloat(settings.elementHighlightWidth))
                 }
             }
             .frame(width: frame.width, height: frame.height)
@@ -740,6 +822,72 @@ struct PerformanceSettingsView: View {
         }
         .formStyle(.grouped)
         .scrollDisabled(true)
+    }
+}
+
+// MARK: - About
+
+struct AboutView: View {
+    @ObservedObject private var updater = Updater.shared
+
+    private static let feedbackURL = "https://github.com/Mason363/Tactile/issues/new/choose"
+    private static let repoURL = "https://github.com/Mason363/Tactile"
+    private static let coffeeURL = "https://buymeacoffee.com/masonchen"
+    private static let siteURL = "https://www.masn.studio"
+
+    private var versionText: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String ?? "—"
+        return "Version \(short) (\(build))"
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                VStack(spacing: 10) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: 96, height: 96)
+                        .accessibilityHidden(true)
+                    Text("Tactile")
+                        .font(.system(size: 22, weight: .semibold))
+                    Text(versionText)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                    Button("Check for Updates…") { updater.checkForUpdates() }
+                        .disabled(!updater.canCheckForUpdates)
+                        .padding(.top, 2)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .listRowInsets(EdgeInsets())
+            }
+
+            Section {
+                aboutLink("Send Feedback or Report an Issue", systemImage: "exclamationmark.bubble.fill", url: Self.feedbackURL)
+                aboutLink("View Source on GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: Self.repoURL)
+                aboutLink("Buy Me a Coffee", systemImage: "cup.and.saucer.fill", url: Self.coffeeURL)
+            }
+
+            Section {
+                Link(destination: URL(string: Self.siteURL)!) {
+                    Text("www.masn.studio")
+                }
+                Text("Made with \(Text("❤️").accessibilityLabel("love")) by Mason Chen")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .listRowBackground(Color.clear)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func aboutLink(_ title: String, systemImage: String, url: String) -> some View {
+        Link(destination: URL(string: url)!) {
+            Label(title, systemImage: systemImage)
+        }
     }
 }
 

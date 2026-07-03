@@ -6,6 +6,7 @@
 import AppKit
 import Combine
 import os
+import QuartzCore
 
 /// Owns the app's state and the feedback pipeline. The pipeline is torn down
 /// completely whenever it shouldn't run (disabled, paused, or missing
@@ -33,22 +34,17 @@ final class AppController: ObservableObject {
     /// Bundle IDs whose web content the browser bridge owns. Chrome only for now.
     private static let bridgedBrowserIDs: Set<String> = ["com.google.Chrome"]
 
-    /// Arbitration state: the bridge owns feedback (and the AX path stands down)
-    /// only when all of these hold.
+    /// Bridge state. The extension is a *supplement*, never an exclusive
+    /// owner: the accessibility path always runs, and the two are deduped
+    /// against each other by the shared fire region in FeedbackController
+    /// (the extension reports each element's screen rect for exactly this).
+    /// Exclusive ownership was tried and abandoned — the extension sees less
+    /// than the accessibility tree in places (oversized rows, uninstrumented
+    /// chrome:// pages) and its service worker adds wake-up latency, so
+    /// gating the AX path on it caused dead spots and lag.
     private var bridgeConnected = false
     private var frontmostIsBridgedBrowser = false
-    private var pointerInBrowserContent = false
     private var frontmostIsExcluded = false
-
-    /// While hot, the accessibility pipeline defers inside the browser's web
-    /// content — the extension drives feedback and the AX queries are skipped.
-    private var bridgeIsHot: Bool {
-        settings.browserIntegrationEnabled
-            && bridgeConnected
-            && frontmostIsBridgedBrowser
-            && pointerInBrowserContent
-            && !frontmostIsExcluded
-    }
 
     private init() {
         let settings = SettingsStore()
@@ -58,21 +54,27 @@ final class AppController: ObservableObject {
 
     func bootstrap() {
         cursorMonitor.onSample = { [weak self] point in
-            guard let self, !self.bridgeIsHot else { return }
-            self.resolver.resolve(at: point)
+            self?.resolver.resolve(at: point)
         }
         cursorMonitor.onScreenEdge = { [weak self] in
             self?.feedback.screenEdgeBump()
         }
         resolver.onResolve = { [weak self] point, resolved in
-            guard let self, !self.bridgeIsHot else { return }
-            self.feedback.handle(point: point, resolved: resolved)
+            self?.feedback.handle(point: point, resolved: resolved)
         }
         feedback.onSkipRegionUpdate = { [weak self] region in
             self?.cursorMonitor.skipRegion = region
         }
-        feedback.onHoverState = { [weak self] kind, frame in
-            self?.indicator.setState(kind: kind, frame: frame)
+        feedback.onHoverState = { [weak self] kind, frame, caption in
+            self?.indicator.setState(kind: kind, frame: frame, caption: caption)
+        }
+        feedback.onFire = { [weak self] in
+            self?.indicator.flashFire()
+        }
+        cursorMonitor.onClick = { [weak self] point in
+            // Clicks change the UI under the cursor (menus open, pages
+            // navigate) — cached frames stop meaning anything.
+            self?.feedback.invalidateAfterClick(at: point)
         }
 
         bridge.onEvent = { [weak self] message in
@@ -84,7 +86,6 @@ final class AppController: ObservableObject {
             if !connected {
                 // A hard drop (extension crash/reload) can't send a "leave", so
                 // end any in-progress feel — otherwise a hover buzz would run on.
-                self.pointerInBrowserContent = false
                 self.feedback.reset()
             }
         }
@@ -152,6 +153,10 @@ final class AppController: ObservableObject {
         cursorMonitor.screenEdgesEnabled = settings.screenEdgesEnabled
         resolver.wantsWindow = settings.windowBoundsEnabled
         resolver.wantsFocusedWindow = settings.focusedWindowButtonsOnly
+        // The exclusion list may have just changed — re-evaluate the app
+        // that's already frontmost, not only the next one to activate.
+        let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        frontmostIsExcluded = bundleID.map { settings.excludedBundleIDs.contains($0) } ?? false
         updateBridge()
         updateIndicator()
     }
@@ -159,13 +164,22 @@ final class AppController: ObservableObject {
     private func updateIndicator() {
         indicator.circleEnabled = settings.hoverCircleEnabled
         indicator.outlineEnabled = settings.elementHighlightEnabled
+        indicator.crosshairEnabled = settings.crosshairEnabled
+        indicator.captionEnabled = settings.hoverCaptionEnabled
+        indicator.fireFlashEnabled = settings.fireFlashEnabled
         indicator.circleDiameter = settings.hoverCircleDiameter
+        indicator.circleFilled = settings.hoverCircleFilled
+        indicator.circleStrokeWidth = settings.hoverCircleStrokeWidth
+        indicator.outlineWidth = settings.elementHighlightWidth
+        indicator.crosshairWidth = settings.crosshairWidth
         indicator.clickableColor = NSColor(hexString: settings.clickableColorHex) ?? .systemGreen
         indicator.dangerColor = NSColor(hexString: settings.dangerColorHex) ?? .systemRed
-        cursorMonitor.onRawMove = settings.hoverCircleEnabled
+        // Raw moves feed every cursor-tracking aid; nil when none is on so an
+        // aid-free setup costs nothing per mouse event.
+        cursorMonitor.onRawMove = indicator.wantsRawMoves
             ? { [weak self] point in self?.indicator.moveCircle(to: point) }
             : nil
-        if !settings.hoverCircleEnabled, !settings.elementHighlightEnabled {
+        if !indicator.wantsRawMoves, !settings.elementHighlightEnabled, !settings.fireFlashEnabled {
             indicator.hideAll()
         }
     }
@@ -178,7 +192,6 @@ final class AppController: ObservableObject {
         cursorMonitor.stop()
         feedback.reset()
         bridge.stop()
-        pointerInBrowserContent = false
         indicator.hideAll()
     }
 
@@ -195,7 +208,6 @@ final class AppController: ObservableObject {
             bridge.start()
         } else if !shouldRun, bridge.isRunning {
             bridge.stop()
-            pointerInBrowserContent = false
         }
     }
 
@@ -210,7 +222,12 @@ final class AppController: ObservableObject {
 
     private func handleBridgeEvent(_ message: BridgeMessage) {
         guard settings.browserIntegrationEnabled, frontmostIsBridgedBrowser, !frontmostIsExcluded else { return }
-        pointerInBrowserContent = (message.inViewport ?? true)
+        // Hovers without a rect come from an outdated extension build. They
+        // can't be deduped against the accessibility path, so rather than
+        // risk doubled feedback they're dropped — the AX path covers Chrome
+        // fully on its own until the extension is reloaded.
+        if message.type == "hover", message.cgRect == nil { return }
+        guard message.type != "ping" else { return }
         feedback.handleBridge(message)
     }
 
@@ -219,9 +236,7 @@ final class AppController: ObservableObject {
         frontmostIsBridgedBrowser = bundleID.map(Self.bridgedBrowserIDs.contains) ?? false
         frontmostIsExcluded = bundleID.map { settings.excludedBundleIDs.contains($0) } ?? false
         if !frontmostIsBridgedBrowser {
-            // Left the browser: the extension can't report, so hand everything
-            // back to the AX path and forget any half-entered web element.
-            pointerInBrowserContent = false
+            // Left the browser: forget any half-entered web element.
             feedback.reset()
         }
     }

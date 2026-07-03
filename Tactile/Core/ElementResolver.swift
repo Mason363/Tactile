@@ -22,6 +22,9 @@ struct ResolvedElement {
     var title: String?
     /// Checked/selected state, fetched only for toggles and tabs.
     var isOn: Bool?
+    /// Destination URL, fetched only for links — used to treat sibling
+    /// fragments of one result (title, snippet, byline) as a single target.
+    var url: String?
     /// Containing window, fetched only when window-boundary feedback is on.
     var window: AXUIElement?
     /// Whether the element is in the system's focused window. Defaults true
@@ -62,9 +65,12 @@ final class ElementResolver {
     private var cachedFocusedMenu: AXUIElement?
     private var focusedMenuStamp: CFTimeInterval = 0
 
-    /// Separate handle for focus queries: they run at most every 250ms, so
+    /// Separate handle for focus queries: they run at most every 400ms, so
     /// they can afford a longer timeout than per-sample hit-testing —
-    /// Chromium regularly needs more than 50ms to answer them.
+    /// Chromium regularly needs more than 50ms to answer them. The timeout
+    /// is still kept tight (100ms): this query runs at the front of every
+    /// hit-test on a cache miss, so its worst case bounds the whole
+    /// pipeline's worst case.
     private let focusQuery = AXUIElementCreateSystemWide()
 
     private static let axTimeout: Float = 0.05
@@ -80,7 +86,7 @@ final class ElementResolver {
 
     init() {
         AXUIElementSetMessagingTimeout(systemWide, Self.axTimeout)
-        AXUIElementSetMessagingTimeout(focusQuery, 0.25)
+        AXUIElementSetMessagingTimeout(focusQuery, 0.1)
     }
 
     func resolve(at point: CGPoint) {
@@ -107,7 +113,13 @@ final class ElementResolver {
 
             let resolved = hitTest(at: point)
             if let onResolve {
-                Task { @MainActor in onResolve(point, resolved) }
+                // FIFO delivery (DispatchQueue.main, not unstructured Tasks):
+                // two resolutions arriving out of order would let a STALE
+                // position overwrite a newer one downstream — the dedupe
+                // state machine assumes samples arrive in cursor order.
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { onResolve(point, resolved) }
+                }
             }
         }
     }
@@ -137,17 +149,39 @@ final class ElementResolver {
 
         let resolved = makeResolved(element)
         if isClickable(resolved) {
-            // A generic pressable is the weak catch-all bucket — often a
-            // *container* that merely advertises a press action while holding
-            // the real controls inside it (SwiftUI Form rows expose the whole
-            // row this way; so do many web and Electron wrappers). Prefer a
-            // more specific control under the cursor; keep the container only
-            // if there's nothing better, so genuine <div>-style buttons with
-            // no inner control still fire.
+            // A generic pressable is the weak catch-all bucket, wrong in two
+            // opposite ways. It can be a *container* that merely advertises a
+            // press action while holding the real controls inside it (SwiftUI
+            // Form rows, web and Electron wrappers) — prefer a more specific
+            // control under the cursor. And it can be a *fragment*: web
+            // engines expose the press action on the descendants of a
+            // clickable too, so the image and each text run inside a link or
+            // button all report as pressable islands of their own — firing
+            // once per island as the cursor crosses a single visual control.
+            // Resolve those to the real control above; keep the element when
+            // nothing better exists, so genuine <div>-style buttons still fire.
             if ClickabilityClassifier.classify(role: resolved.role, subrole: resolved.subrole, actions: resolved.actions) == .genericPressable {
                 let deadline = CACurrentMediaTime() + Self.searchBudget
-                if let specific = specificDescendant(of: element, containing: point, depth: 3, deadline: deadline) {
+                if let frame = resolved.frame, frame.width > 420 || frame.height > 120,
+                   let specific = specificDescendant(of: element, containing: point, depth: 3, deadline: deadline) {
                     return enrich(specific)
+                }
+                if let ancestor = semanticAncestor(of: element, containing: point, deadline: deadline) {
+                    // The enclosing control is the target: one identity for
+                    // the button and everything drawn inside it.
+                    if let frame = ancestor.frame, ClickabilityClassifier.isControlSized(frame) {
+                        return enrich(ancestor)
+                    }
+                    // The enclosing control is too big to fire (a whole card
+                    // link): keep the fragment, but carry the card's
+                    // destination so all its fragments — image, title, text
+                    // lines — dedupe as one logical target downstream.
+                    var enriched = enrich(resolved)
+                    var urlRef: CFTypeRef?
+                    if AXUIElementCopyAttributeValue(ancestor.element, "AXURL" as CFString, &urlRef) == .success {
+                        enriched.url = (urlRef as? URL)?.absoluteString ?? (urlRef as? String)
+                    }
+                    return enriched
                 }
             }
             return enrich(resolved)
@@ -223,6 +257,11 @@ final class ElementResolver {
         case .tab:
             enriched.isOn = boolAttribute(resolved.element, "AXSelected")
                 ?? numberAttribute(resolved.element, "AXValue").map { $0 > 0 }
+        case .link:
+            var urlRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(resolved.element, "AXURL" as CFString, &urlRef) == .success {
+                enriched.url = (urlRef as? URL)?.absoluteString ?? (urlRef as? String)
+            }
         default:
             break
         }
@@ -324,10 +363,16 @@ final class ElementResolver {
         return nil
     }
 
-    /// Spatial descent that only accepts a *specifically* classified control —
-    /// anything but another generic pressable — so a pressable container
-    /// resolves to the real button or link inside it, descending through
-    /// generic wrappers on the way down.
+    /// Categories that justify redirecting a pressable container to a child:
+    /// unambiguous interactive controls. Text fields and sliders are left
+    /// out deliberately — a pressable row wrapping a text field is usually
+    /// *about* the row, and redirecting there would silence it (those
+    /// categories are off by default).
+    private static let specificCategories: Set<FeedbackCategory> = [.button, .link, .toggle, .tab, .menuItem]
+
+    /// Spatial descent that only accepts an unambiguous control, so a
+    /// pressable container resolves to the real button or link inside it,
+    /// descending through generic wrappers on the way down.
     private func specificDescendant(of element: AXUIElement, containing point: CGPoint, depth: Int, deadline: CFTimeInterval) -> ResolvedElement? {
         guard depth > 0, CACurrentMediaTime() < deadline else { return nil }
 
@@ -338,11 +383,39 @@ final class ElementResolver {
 
             let resolved = makeResolved(child)
             let category = ClickabilityClassifier.classify(role: resolved.role, subrole: resolved.subrole, actions: resolved.actions)
-            if let category, category != .genericPressable { return resolved }
+            if let category, Self.specificCategories.contains(category) { return resolved }
 
             if let deeper = specificDescendant(of: child, containing: point, depth: depth - 1, deadline: deadline) {
                 return deeper
             }
+        }
+        return nil
+    }
+
+    /// Walks up looking for an unambiguous control (button, link, toggle,
+    /// tab, menu item) that contains the point — the identity-stable owner
+    /// of a pressable fragment. Generic wrappers along the way are walked
+    /// through, structural roles end the walk.
+    private func semanticAncestor(of element: AXUIElement, containing point: CGPoint, deadline: CFTimeInterval) -> ResolvedElement? {
+        var current = element
+        for _ in 0..<4 {
+            if CACurrentMediaTime() >= deadline { return nil }
+            var parentRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(current, "AXParent" as CFString, &parentRef) == .success,
+                  let parentValue = parentRef, CFGetTypeID(parentValue) == AXUIElementGetTypeID()
+            else { return nil }
+            let parent = parentValue as! AXUIElement
+
+            let resolved = makeResolved(parent)
+            if ["AXWindow", "AXSheet", "AXDrawer", "AXApplication", "AXMenuBar", "AXWebArea"].contains(resolved.role) {
+                return nil
+            }
+            if let category = ClickabilityClassifier.classify(role: resolved.role, subrole: resolved.subrole, actions: resolved.actions),
+               Self.specificCategories.contains(category),
+               let frame = resolved.frame, frame.contains(point) {
+                return resolved
+            }
+            current = parent
         }
         return nil
     }
@@ -412,7 +485,7 @@ final class ElementResolver {
     /// focused, which is the overwhelmingly common case.
     private func focusedMenuContainer() -> AXUIElement? {
         let now = CACurrentMediaTime()
-        if now - focusedMenuStamp < 0.25 { return cachedFocusedMenu }
+        if now - focusedMenuStamp < 0.4 { return cachedFocusedMenu }
         focusedMenuStamp = now
         cachedFocusedMenu = nil
 

@@ -1,0 +1,32 @@
+name: Feature request or feedback
+description: Suggest an improvement, a new haptic, a setting, or share how Tactile works for you.
+title: "[Idea]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tactile is an accessibility tool first — feedback about what helps (or gets in the way) is genuinely useful. Thanks for sharing.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: Describe the feature, change, or feedback.
+      placeholder: e.g. A separate haptic when the cursor enters a text field, so I can find inputs by feel.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why does it matter?
+      description: What problem does it solve, or who does it help?
+    validations:
+      required: false
+  - type: input
+    id: where
+    attributes:
+      label: Where would it apply?
+      description: A specific app, website, or all of macOS.
+      placeholder: e.g. everywhere, or just in Safari
+    validations:
+      required: false

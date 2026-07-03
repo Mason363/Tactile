@@ -1,0 +1,76 @@
+name: Bug report
+description: Something isn't working right — a wrong or missing haptic, a crash, or unexpected behaviour.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. A little detail goes a long way — especially the **app or website** where it happens, since Tactile reads each app's accessibility tree differently.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect to feel, and what did you feel instead?
+      placeholder: e.g. Hovering the buttons in the toolbar of X app fires the haptic several times per button.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact path to make it happen again.
+      placeholder: |
+        1. Open …
+        2. Move the cursor across …
+        3. Feel …
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where does it happen?
+      description: The specific app or website (a URL is ideal for web pages).
+      placeholder: e.g. Finder sidebar, or https://github.com/…
+    validations:
+      required: true
+  - type: input
+    id: tactile-version
+    attributes:
+      label: Tactile version
+      description: Settings → About shows this (e.g. "Version 1.1.5 (5)").
+      placeholder: "1.1.5 (5)"
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description:  → About This Mac.
+      placeholder: "macOS 15.5"
+    validations:
+      required: true
+  - type: dropdown
+    id: trackpad
+    attributes:
+      label: How are you pointing?
+      options:
+        - Built-in MacBook trackpad
+        - Magic Trackpad
+        - Mouse (no trackpad haptics)
+        - Other / not sure
+    validations:
+      required: true
+  - type: checkboxes
+    id: options
+    attributes:
+      label: Setup
+      options:
+        - label: I have the Chrome browser integration turned on
+        - label: Enhanced (actuator) haptics is turned on
+        - label: I've reloaded the Chrome extension since updating (web bug only)
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, a screen recording, or Console logs (subsystem `com.masonchen.Tactile`) all help.

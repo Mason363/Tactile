@@ -51,6 +51,11 @@ final class CursorMonitor {
     var screenEdgesEnabled = false
     private var atScreenEdge = false
 
+    /// Called with the location of every mouse click. Clicks change what's
+    /// under the cursor (menus open, pages navigate, buttons disappear), so
+    /// cached geometry is invalidated and the resting position re-resolved.
+    var onClick: ((CGPoint) -> Void)?
+
     /// While the cursor stays inside this rect no new samples are emitted.
     /// Set by the pipeline after each resolution.
     var skipRegion: CGRect?
@@ -60,6 +65,7 @@ final class CursorMonitor {
     private var globalMoveMonitor: Any?
     private var localMoveMonitor: Any?
     private var globalScrollMonitor: Any?
+    private var globalClickMonitor: Any?
     private var trailingTimer: Timer?
 
     private var lastSampleTime: CFTimeInterval = 0
@@ -87,12 +93,13 @@ final class CursorMonitor {
         eventTap = nil
         tapRunLoopSource = nil
 
-        for monitor in [globalMoveMonitor, localMoveMonitor, globalScrollMonitor] {
+        for monitor in [globalMoveMonitor, localMoveMonitor, globalScrollMonitor, globalClickMonitor] {
             if let monitor { NSEvent.removeMonitor(monitor) }
         }
         globalMoveMonitor = nil
         localMoveMonitor = nil
         globalScrollMonitor = nil
+        globalClickMonitor = nil
         cancelTrailingSample()
         skipRegion = nil
         lastPoint = nil
@@ -106,6 +113,8 @@ final class CursorMonitor {
             (1 << CGEventType.mouseMoved.rawValue)
             | (1 << CGEventType.leftMouseDragged.rawValue)
             | (1 << CGEventType.scrollWheel.rawValue)
+            | (1 << CGEventType.leftMouseUp.rawValue)
+            | (1 << CGEventType.rightMouseUp.rawValue)
 
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -139,12 +148,27 @@ final class CursorMonitor {
             handleMove()
         case .scrollWheel:
             handleScroll()
+        case .leftMouseUp, .rightMouseUp:
+            handleClick()
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             // The system disables slow taps; re-enable and keep going.
             if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
         default:
             break
         }
+    }
+
+    /// A click likely changed the UI under the cursor: throw away the cached
+    /// element frame and the distance gate, tell the pipeline to forget its
+    /// own geometry, and re-resolve the resting position shortly after the
+    /// click's effects (menu opening, navigation) have landed.
+    private func handleClick() {
+        skipRegion = nil
+        lastPoint = nil
+        if let point = currentPoint() {
+            onClick?(point)
+        }
+        scheduleTrailingSample(after: 0.15)
     }
 
     private func startNSEventMonitors() {
@@ -160,6 +184,9 @@ final class CursorMonitor {
         globalScrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.scrollWheel]) { [weak self] _ in
             self?.handleScroll()
         }
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp, .rightMouseUp]) { [weak self] _ in
+            self?.handleClick()
+        }
     }
 
     private func handleMove() {
@@ -170,8 +197,9 @@ final class CursorMonitor {
         let elapsed = now - lastSampleTime
         if !unthrottled, elapsed < sampleInterval {
             // Throttled — but if this turns out to be the last event of the
-            // gesture, the resting position still needs to be resolved.
-            scheduleTrailingSample(after: sampleInterval - elapsed)
+            // gesture, the resting position still needs to be resolved (as a
+            // settle, so it lands even if the final nudge was under 2 px).
+            scheduleTrailingSample(after: sampleInterval - elapsed, settling: true)
             return
         }
         sample(now: now)
@@ -182,7 +210,15 @@ final class CursorMonitor {
         handleMove()
     }
 
-    private func sample(now: CFTimeInterval) {
+    /// Resolves the element under the cursor, subject to two gates.
+    ///
+    /// `settling` is set when this call comes from the trailing timer armed by
+    /// a distance-gated rejection: the cursor was creeping in sub-`minDistance`
+    /// steps and has now paused, so we resolve wherever it came to rest and
+    /// skip the distance gate. Without this, a slow creep that stops inside the
+    /// 2 px dead zone — exactly what a hand does easing onto a control — would
+    /// never resolve, and nothing would fire until the cursor jumped ≥2 px.
+    private func sample(now: CFTimeInterval, settling: Bool = false) {
         cancelTrailingSample()
         guard let point = currentPoint() else { return }
 
@@ -190,7 +226,11 @@ final class CursorMonitor {
             checkScreenEdge(point)
         }
 
-        if let lastPoint, hypot(point.x - lastPoint.x, point.y - lastPoint.y) < minDistance {
+        if !settling, let lastPoint, hypot(point.x - lastPoint.x, point.y - lastPoint.y) < minDistance {
+            // Below the jitter threshold this instant — but arm a trailing
+            // settle so the resting position still resolves if the movement
+            // pauses here. Re-armed on each tiny move; fires once they stop.
+            scheduleTrailingSample(after: sampleInterval, settling: true)
             return
         }
         if let skipRegion, skipRegion.contains(point) {
@@ -203,12 +243,12 @@ final class CursorMonitor {
         onSample?(point)
     }
 
-    private func scheduleTrailingSample(after delay: TimeInterval) {
+    private func scheduleTrailingSample(after delay: TimeInterval, settling: Bool = false) {
         guard trailingTimer == nil else { return }
         let timer = Timer(timeInterval: max(delay, 0.005), repeats: false) { [weak self] _ in
             guard let self else { return }
             self.trailingTimer = nil
-            self.sample(now: CACurrentMediaTime())
+            self.sample(now: CACurrentMediaTime(), settling: settling)
         }
         // .common keeps the trailing sample firing during menu and drag
         // tracking, when the default run loop mode is suspended.

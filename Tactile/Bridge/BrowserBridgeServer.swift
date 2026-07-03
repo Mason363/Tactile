@@ -121,11 +121,19 @@ final class BrowserBridgeServer {
         }
     }
 
+    // Delivery uses DispatchQueue.main (strict FIFO), NOT unstructured Tasks:
+    // Task { @MainActor } gives no ordering guarantee between separate tasks,
+    // and a hover processed after the leave that followed it (or vice versa)
+    // corrupts the enter/leave state machine downstream.
     private func deliver(_ message: BridgeMessage) {
-        Task { @MainActor [weak self] in self?.onEvent?(message) }
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.onEvent?(message) }
+        }
     }
 
     private func deliverConnection(_ connected: Bool) {
-        Task { @MainActor [weak self] in self?.onConnectionChange?(connected) }
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.onConnectionChange?(connected) }
+        }
     }
 }

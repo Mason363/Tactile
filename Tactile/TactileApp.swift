@@ -44,6 +44,18 @@ struct TactileApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Two instances means two event taps and doubled haptics on every
+        // element. The newest launch wins; older instances are shut down.
+        // (Chrome's native-messaging relay runs the same binary but never
+        // registers as an app, so it's unaffected.)
+        if let bundleID = Bundle.main.bundleIdentifier {
+            let mine = ProcessInfo.processInfo.processIdentifier
+            for other in NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+            where other.processIdentifier != mine {
+                other.forceTerminate()
+            }
+        }
+
         let controller = AppController.shared
         controller.bootstrap()
         // Start Sparkle so background update checks are scheduled.

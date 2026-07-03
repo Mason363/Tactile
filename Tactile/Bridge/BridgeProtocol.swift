@@ -8,13 +8,16 @@
 //  entirely without — AppKit.
 //
 
+import CoreGraphics
 import Foundation
 
 /// One message from the extension. Sent as newline-delimited JSON over the
-/// local Unix socket; the extension emits one only when the hovered clickable's
-/// identity changes.
+/// local Unix socket; the extension emits one when the hovered clickable's
+/// identity changes, plus a throttled "ping" while the pointer moves so the
+/// app knows the page is instrumented (see AppController's hot-decay).
 struct BridgeMessage: Codable {
-    /// "hover" — the cursor is over a clickable; "leave" — it isn't.
+    /// "hover" — the cursor is over a clickable; "leave" — it isn't;
+    /// "ping" — pointer is moving inside an instrumented page.
     var type: String
     /// FeedbackCategory raw value, present on "hover".
     var el: String?
@@ -25,9 +28,23 @@ struct BridgeMessage: Codable {
     /// labeled control) versus an incidental one (three-dot menu, favicon,
     /// "Read more"). Used by Simple mode to fire only on the primary targets.
     var primary: Bool?
+    /// The element's frame in global screen coordinates [x, y, w, h],
+    /// approximate (chrome height inferred, page zoom estimated and
+    /// compensated by the extension). Lets the app treat an AX-path fire
+    /// and a bridge fire on the same control as one event, and drives the
+    /// element-highlight visual aid on web pages.
+    var rect: [Double]?
     /// Whether the cursor is inside the page. false means it moved to browser
     /// chrome or another window, so the accessibility path should take over.
     var inViewport: Bool?
+    /// The element's accessible name, present on "hover" — drives the
+    /// element-caption visual aid for web content.
+    var label: String?
+
+    var cgRect: CGRect? {
+        guard let rect, rect.count == 4, rect[2] > 0, rect[3] > 0 else { return nil }
+        return CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3])
+    }
 }
 
 /// Well-known identifiers and file locations the three parts must agree on.

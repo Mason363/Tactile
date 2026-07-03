@@ -24,9 +24,13 @@ final class FeedbackController {
     var onSkipRegionUpdate: ((CGRect?) -> Void)?
 
     /// Tells the visual hover indicator what the cursor is over (and where,
-    /// in accessibility coordinates). Only called when the hovered element
-    /// actually changes.
-    var onHoverState: ((HoverKind, CGRect?) -> Void)?
+    /// in accessibility coordinates), plus a short caption naming it
+    /// ("Save — Button"). Only called when the hovered element changes.
+    var onHoverState: ((HoverKind, CGRect?, String?) -> Void)?
+
+    /// Fires with every haptic activation — drives the fire-flash visual
+    /// echo, so feedback stays perceivable without a finger on the trackpad.
+    var onFire: (() -> Void)?
 
     private let haptics = SystemHapticEngine()
     private let audio = AudioFeedbackEngine()
@@ -36,13 +40,25 @@ final class FeedbackController {
     private var lastWindow: AXUIElement?
     /// Set when the current element fired, so hover-out knows to play.
     private var firedForCurrentElement = false
-    /// Frame and app of the control that last fired, kept while the cursor
-    /// stays inside it. Web apps re-render controls on hover (ripple and
-    /// shadow wrappers), minting new accessibility nodes for the same visual
-    /// control — so element identity churns under a resting cursor. Anything
-    /// resolved inside this region that nests with it is still the same
-    /// control: no re-fire, no hover-out.
-    private var activeFireRegion: (frame: CGRect, pid: pid_t)?
+    /// The control that last fired, remembered by frame while the cursor
+    /// stays inside it. This is the single dedupe memory for BOTH feedback
+    /// paths: web apps re-render controls on hover (minting new accessibility
+    /// and DOM nodes for the same visual control), and the accessibility path
+    /// and the browser extension can each report the same control moments
+    /// apart. Anything that nests with the fired frame is still the same
+    /// control: no re-fire, no hover-out. `pid` is nil for bridge-reported
+    /// controls (the extension has no pid, and its frames are approximate).
+    private struct FireRegion {
+        var frame: CGRect
+        var pid: pid_t?
+    }
+
+    private var activeFireRegion: FireRegion?
+    /// The destination of the last fired link. Search-result cards repeat
+    /// one destination across several sibling links; crossing between them
+    /// is one logical target, one feel. Sticky across the gaps between the
+    /// fragments; replaced by the next fire, cleared by clicks and resets.
+    private var lastFiredLinkURL: String?
     private var lastTickTime: CFTimeInterval = 0
     private var dwellTimer: Timer?
     private var vibrateTimer: Timer?
@@ -65,17 +81,25 @@ final class FeedbackController {
     }
 
     func handle(point: CGPoint, resolved: ResolvedElement?) {
-        if let region = activeFireRegion, !region.frame.insetBy(dx: -2, dy: -2).contains(point) {
-            activeFireRegion = nil
-        }
+        // Whether the cursor is still inside the fired frame. Bridge-reported
+        // frames (pid == nil) carry a little error — browser chrome offset,
+        // page zoom — so they get the same generous slack the bridge dedupe
+        // uses; clearing them on a 2px miss re-armed the control and doubled
+        // feedback. The region itself is NOT cleared here: leaving a fired
+        // fragment's frame while staying inside its enclosing control must
+        // still read as the same control (see the identity check below).
+        let pointInRegion = activeFireRegion.map { region in
+            region.frame.insetBy(dx: -Self.regionSlack(region), dy: -Self.regionSlack(region)).contains(point)
+        } ?? false
 
         guard let resolved else {
             // A transient hit-test failure while still inside the fired
             // control (common while web apps re-render on hover) is not an
             // exit — keep the current feel.
-            if activeFireRegion != nil { return }
+            if pointInRegion { return }
+            activeFireRegion = nil
             onSkipRegionUpdate?(Self.jitterBox(around: point))
-            onHoverState?(.none, nil)
+            onHoverState?(.none, nil, nil)
             leaveCurrentElement(enteringFiringElement: false)
             lastElement = nil
             return
@@ -114,18 +138,38 @@ final class FeedbackController {
         // feedback fire on enter (and exit) only.
         if let lastElement, CFEqual(lastElement, resolved.element) { return }
 
-        // Still inside the frame that fired, and the new element nests with
-        // it (its own label, an inert overlay, a re-rendered wrapper, or a
-        // container spanning it): same logical control, stay quiet.
-        if let region = activeFireRegion, resolved.pid == region.pid {
-            let grown = region.frame.insetBy(dx: -2, dy: -2)
-            let nests = resolved.frame.map { frame in
-                grown.contains(frame) || frame.insetBy(dx: -2, dy: -2).contains(region.frame)
-            } ?? true
-            if nests {
-                lastElement = resolved.element
-                return
+        // The same control the last fire covered — its own label, an inert
+        // overlay, a re-rendered wrapper, a container spanning it, or the
+        // control itself with its frame shifted by a hover animation: stay
+        // quiet. The region grows to the union so a control absorbs ALL its
+        // fragments — when a small badge fires first and its enclosing tab
+        // comes next (even after the cursor has moved past the badge's own
+        // frame), the region becomes the whole tab, and every further
+        // fragment inside it stays quiet too.
+        if let region = activeFireRegion, region.pid == nil || region.pid == resolved.pid,
+           Self.isSameControl(frame: resolved.frame, category: category, region: region, pointInRegion: pointInRegion) {
+            // Grow only by clickable, control-sized frames: a window-sized
+            // container also spans the fired control, but absorbing it would
+            // silence the window; an inert toolbar spanning the fired button
+            // would silence its siblings.
+            if category != nil, let frame = resolved.frame, Self.isControlSized(frame) {
+                activeFireRegion?.frame = region.frame.union(frame)
             }
+            lastElement = resolved.element
+            return
+        }
+        // Genuinely somewhere else: the fired control's dedupe memory is done.
+        if !pointInRegion { activeFireRegion = nil }
+
+        // Same destination as the link that just fired: a sibling fragment
+        // of the same result (title, snippet, byline), not a new target.
+        if let url = resolved.url, url == lastFiredLinkURL {
+            if let frame = resolved.frame, Self.isControlSized(frame),
+               let region = activeFireRegion {
+                activeFireRegion?.frame = region.frame.union(frame)
+            }
+            lastElement = resolved.element
+            return
         }
 
         emitHoverState(category: category, resolved: resolved)
@@ -148,7 +192,11 @@ final class FeedbackController {
         guard firesOnEnter else { return }
 
         let waveform = styledWaveform(for: category, resolved: resolved)
-        let firedRegion = resolved.frame.map { (frame: $0, pid: resolved.pid) }
+        let firedRegion = resolved.frame.map { FireRegion(frame: $0, pid: resolved.pid) }
+        // Only a fire that HAS a destination replaces the link memory: an
+        // interleaved generic fire (a card's pressable wrapper) must not
+        // re-arm the card's own link fragments.
+        let firedURL = resolved.url
         if config.dwellDelay > 0 {
             dwellTimer = Timer.scheduledTimer(withTimeInterval: config.dwellDelay, repeats: false) { [weak self] _ in
                 Task { @MainActor [weak self] in
@@ -156,15 +204,23 @@ final class FeedbackController {
                     self.play(waveform)
                     self.firedForCurrentElement = true
                     self.activeFireRegion = firedRegion
+                    if let firedURL { self.lastFiredLinkURL = firedURL }
                     self.startVibrationIfEnabled()
                 }
             }
         } else {
             play(waveform)
+            log.debug("fired-geom path=ax cat=\(category.rawValue, privacy: .public) frame=\(resolved.frame.map(Self.geom) ?? "-", privacy: .public) point=\(Int(point.x)),\(Int(point.y), privacy: .public)")
             firedForCurrentElement = true
             activeFireRegion = firedRegion
+            if let firedURL { lastFiredLinkURL = firedURL }
             startVibrationIfEnabled()
         }
+    }
+
+    /// Compact rect for debug logs.
+    private static func geom(_ r: CGRect) -> String {
+        "\(Int(r.origin.x)),\(Int(r.origin.y)),\(Int(r.width))x\(Int(r.height))"
     }
 
     // MARK: - Browser bridge
@@ -177,15 +233,67 @@ final class FeedbackController {
     /// `AXUIElement`. AppController suppresses the AX path while this is hot, so
     /// the two never both fire.
     func handleBridge(_ message: BridgeMessage) {
+        let rect = message.cgRect
+        log.debug("bridge msg type=\(message.type, privacy: .public) el=\(message.el ?? "-", privacy: .public) rect=\(rect.map(Self.geom) ?? "-", privacy: .public) inViewport=\(message.inViewport.map(String.init) ?? "-", privacy: .public)")
+
+        // Geometry sanity: a hover's rect must contain the pointer — the
+        // extension is claiming the cursor is over this element. When it
+        // doesn't (an outdated extension build mis-converting viewport
+        // coordinates: side panels, dev tools, page zoom), every rect is
+        // shifted off the real control, the cross-path dedupe can't work,
+        // and every control double-fires. Dropping inconsistent hovers
+        // degrades safely to accessibility-only coverage instead. The slack
+        // absorbs message latency while the cursor is still moving.
+        if message.type == "hover", let rect,
+           let cursor = CGEvent(source: nil)?.location,
+           !rect.insetBy(dx: -24, dy: -24).contains(cursor) {
+            log.debug("bridge hover dropped: rect=\(Self.geom(rect), privacy: .public) cursor=\(Int(cursor.x)),\(Int(cursor.y), privacy: .public)")
+            return
+        }
+
         guard message.type == "hover",
               let raw = message.el,
               let category = FeedbackCategory(rawValue: raw)
         else {
             // "leave" (or a malformed hover): end the current element, playing
             // the hover-out waveform if one fired.
-            onHoverState?(.none, nil)
+            onHoverState?(.none, nil, nil)
             leaveCurrentElement(enteringFiringElement: false)
             lastElement = nil
+            // NO leave message may clear the fire region — ever. The region's
+            // lifecycle belongs to the accessibility path's real cursor
+            // tracking (handle() clears it when the point actually leaves the
+            // frame), which runs everywhere including browser chrome. Web
+            // pages generate spurious exit reports constantly (tooltip
+            // unmounts, child-boundary crossings, DOM churn); honoring them
+            // wiped the dedupe memory while the pointer sat still on a
+            // control, and the very next hover re-fired it.
+            return
+        }
+
+        // The same control the last fire covered — whether that fire came
+        // from this path or the accessibility path (both run concurrently
+        // and report the same controls moments apart). One control, one
+        // feel. Heavy overlap counts too: hover animations shift the frame
+        // between reports. The region grows to the union so the control
+        // absorbs all its fragments.
+        if let rect, let region = activeFireRegion,
+           Self.roughlyNests(rect, region.frame) || Self.heavilyOverlaps(rect, region.frame) {
+            if Self.isControlSized(rect) {
+                activeFireRegion?.frame = region.frame.union(rect)
+            }
+            let kind: HoverKind = !(message.enabled ?? true) ? .disabled
+                : ((message.danger ?? false) ? .danger : .clickable)
+            onHoverState?(kind, rect, Self.caption(category: category, label: message.label))
+            return
+        }
+
+        // Container-sized "controls" are wrappers, not targets — same sanity
+        // the accessibility path applies. (No rect means an older extension;
+        // fail open.)
+        if let rect, !Self.isControlSized(rect) {
+            onHoverState?(.none, nil, nil)
+            leaveCurrentElement(enteringFiringElement: false)
             return
         }
 
@@ -194,15 +302,12 @@ final class FeedbackController {
             && bridgeFocusOK(category)
             && bridgeSimpleOK(message)
         leaveCurrentElement(enteringFiringElement: enabled && passes)
-        lastElement = nil
 
-        // The extension doesn't report frames, so the element outline can't
-        // follow it — but the cursor circle's color still can.
         if passes {
             let kind: HoverKind = !enabled ? .disabled : ((message.danger ?? false) ? .danger : .clickable)
-            onHoverState?(kind, nil)
+            onHoverState?(kind, rect, Self.caption(category: category, label: message.label))
         } else {
-            onHoverState?(.none, nil)
+            onHoverState?(.none, nil, nil)
         }
 
         guard passes else { return }
@@ -213,20 +318,56 @@ final class FeedbackController {
         }
 
         let waveform = bridgeWaveform(category: category, isOn: message.on, isDanger: message.danger ?? false)
+        let firedRegion = rect.map { FireRegion(frame: $0, pid: nil) }
         if config.dwellDelay > 0 {
             dwellTimer = Timer.scheduledTimer(withTimeInterval: config.dwellDelay, repeats: false) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    self.play(waveform)
+                    self.play(waveform, reason: "bridge")
                     self.firedForCurrentElement = true
+                    self.activeFireRegion = firedRegion
+                    if let rect { self.onSkipRegionUpdate?(rect) }
                     self.startVibrationIfEnabled()
                 }
             }
         } else {
             play(waveform, reason: "bridge")
+            log.debug("fired-geom path=bridge el=\(raw, privacy: .public) rect=\(rect.map(Self.geom) ?? "-", privacy: .public)")
             firedForCurrentElement = true
+            activeFireRegion = firedRegion
+            // Let the cursor monitor skip re-sampling inside the fired
+            // control — the accessibility path runs concurrently and doesn't
+            // need to re-resolve what the extension already identified.
+            if let rect { onSkipRegionUpdate?(rect) }
             startVibrationIfEnabled()
         }
+    }
+
+    /// After a click the UI under the cursor usually changes (menus open,
+    /// pages navigate), so the last fired control's *frame* no longer means
+    /// anything — forget it rather than suppress whatever appears there.
+    /// Element identity is deliberately kept: if the click changed nothing,
+    /// the same element resolving again must stay quiet, not re-fire.
+    func invalidateAfterClick(at point: CGPoint) {
+        // Shrink — don't clear — the fire region to a small box at the click
+        // point. The clicked control re-renders with a fresh node identity in
+        // web apps, but its frame still contains this point, so it reads as
+        // the same control instead of a fresh tick. New UI appearing around
+        // the point (menu items, the next page) extends past the box and
+        // fires normally.
+        activeFireRegion = FireRegion(
+            frame: CGRect(x: point.x - 12, y: point.y - 12, width: 24, height: 24),
+            pid: nil
+        )
+        lastFiredLinkURL = nil
+    }
+
+    /// Approximate frame equality/containment for bridge-reported frames,
+    /// which carry a little error (browser chrome offset, page zoom).
+    private static func roughlyNests(_ a: CGRect, _ b: CGRect) -> Bool {
+        let slack: CGFloat = 12
+        return b.insetBy(dx: -slack, dy: -slack).contains(a)
+            || a.insetBy(dx: -slack, dy: -slack).contains(b)
     }
 
     /// Danger and checked-state styling for a bridge element, mirroring
@@ -267,10 +408,12 @@ final class FeedbackController {
 
     /// Forgets the current element so re-entering it ticks again.
     func reset() {
+        log.debug("reset")
         lastElement = nil
         lastWindow = nil
         firedForCurrentElement = false
         activeFireRegion = nil
+        lastFiredLinkURL = nil
         dwellTimer?.invalidate()
         dwellTimer = nil
         stopVibration()
@@ -282,7 +425,7 @@ final class FeedbackController {
     /// Danger context overrides the category waveform; checked/selected
     /// state appends a confirmation pulse.
     private func styledWaveform(for category: FeedbackCategory, resolved: ResolvedElement) -> HapticWaveform {
-        if config.dangerEnabled, ContextDetector.isDanger(title: resolved.title, subrole: resolved.subrole) {
+        if config.dangerEnabled, ContextDetector.isDanger(title: resolved.title, subrole: resolved.subrole, category: category) {
             return config.dangerWaveform
         }
 
@@ -296,22 +439,30 @@ final class FeedbackController {
     }
 
     /// Reduces a resolution to what the visual indicator shows: nothing,
-    /// clickable, destructive, or disabled.
+    /// clickable, destructive, or disabled — plus the caption naming it.
     private func emitHoverState(category: FeedbackCategory?, resolved: ResolvedElement) {
         guard let onHoverState else { return }
         guard let category, config.enabledCategories.contains(category), passesSimpleMode(category, resolved) else {
-            onHoverState(.none, nil)
+            onHoverState(.none, nil, nil)
             return
         }
         let kind: HoverKind
         if !resolved.enabled {
             kind = .disabled
-        } else if ContextDetector.isDanger(title: resolved.title, subrole: resolved.subrole) {
+        } else if ContextDetector.isDanger(title: resolved.title, subrole: resolved.subrole, category: category) {
             kind = .danger
         } else {
             kind = .clickable
         }
-        onHoverState(kind, resolved.frame)
+        onHoverState(kind, resolved.frame, Self.caption(category: category, label: resolved.title))
+    }
+
+    /// "Save — Button", or just "Button" when the element has no usable name.
+    private static func caption(category: FeedbackCategory, label: String?) -> String {
+        let name = (label ?? "").replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return category.captionName }
+        return "\(name.count > 40 ? String(name.prefix(39)) + "…" : name) — \(category.captionName)"
     }
 
     private func willFire(_ category: FeedbackCategory, resolved: ResolvedElement) -> Bool {
@@ -387,6 +538,7 @@ final class FeedbackController {
         log.debug("fire reason=\(reason, privacy: .public) steps=\(waveform.steps.count, privacy: .public)")
 
         player.play(waveform, on: hapticEngine)
+        onFire?()
         if config.audioEnabled {
             audio.volume = config.audioVolume
             audio.soundName = config.audioSoundName
@@ -448,10 +600,54 @@ final class FeedbackController {
         CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)
     }
 
-    /// Plausible bounds for an individual control. Generous enough for wide
-    /// menu items, banner links, and big tiles, but rejects the window-sized
-    /// "pressable" containers Electron apps report.
+    /// Plausible bounds for an individual control (shared with the resolver).
     private static func isControlSized(_ frame: CGRect) -> Bool {
-        frame.width <= 900 && frame.height <= 350 && frame.width * frame.height <= 160_000
+        ClickabilityClassifier.isControlSized(frame)
+    }
+
+    /// Geometry tolerance for a fire region. Bridge-reported frames
+    /// (pid == nil) are approximate — browser chrome offset, page zoom —
+    /// so they need the same generous slack `roughlyNests` uses; treating
+    /// them with accessibility-grade precision re-armed controls the bridge
+    /// had already fired and doubled feedback.
+    private static func regionSlack(_ region: FireRegion) -> CGFloat {
+        region.pid == nil ? 12 : 2
+    }
+
+    /// Whether a newly resolved frame is the *same control* the fire region
+    /// remembers. Nesting either way is identity (a label inside the fired
+    /// control, or a wrapper spanning it). So is heavy mutual overlap: hover
+    /// animations translate and scale controls, and hover-reactive sites
+    /// re-render mid-animation, so the same control routinely comes back
+    /// with a shifted frame that no longer nests. Once the cursor has left
+    /// the fired frame, only a *clickable, control-sized* enclosing frame
+    /// (the tab whose badge fired first) or heavy overlap still counts —
+    /// an inert window-spanning container must end the feel, not extend it.
+    private static func isSameControl(frame: CGRect?, category: FeedbackCategory?, region: FireRegion, pointInRegion: Bool) -> Bool {
+        // A transient frame-less resolution inside the fired control is the
+        // same control re-rendering; outside it, it's an exit.
+        guard let frame else { return pointInRegion }
+        let slack = regionSlack(region)
+        let grownRegion = region.frame.insetBy(dx: -slack, dy: -slack)
+        let grownFrame = frame.insetBy(dx: -slack, dy: -slack)
+        if pointInRegion {
+            return grownRegion.contains(frame)
+                || grownFrame.contains(region.frame)
+                || heavilyOverlaps(frame, region.frame)
+        }
+        guard category != nil else { return false }
+        return (isControlSized(frame) && grownFrame.contains(region.frame))
+            || heavilyOverlaps(frame, region.frame)
+    }
+
+    /// Intersection-over-union identity: frames that mostly cover each other
+    /// are one control mid-animation or re-render; neighbouring controls
+    /// share edges, not area, so they never come close.
+    private static func heavilyOverlaps(_ a: CGRect, _ b: CGRect) -> Bool {
+        let intersection = a.intersection(b)
+        guard !intersection.isNull, !intersection.isEmpty else { return false }
+        let intersectionArea = intersection.width * intersection.height
+        let unionArea = a.width * a.height + b.width * b.height - intersectionArea
+        return unionArea > 0 && intersectionArea / unionArea >= 0.6
     }
 }
