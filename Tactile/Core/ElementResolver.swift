@@ -53,6 +53,11 @@ final class ElementResolver {
     private let queue = DispatchQueue(label: "com.masonchen.Tactile.resolver", qos: .userInteractive)
     private let systemWide = AXUIElementCreateSystemWide()
 
+    /// Our own process id. Querying our own AppKit views' accessibility off
+    /// the main thread is unsafe (see `hitTest`), so own-process resolutions
+    /// are detected up front and run on main.
+    private let ownPID = getpid()
+
     private let stateLock = NSLock()
     private var pendingPoint: CGPoint?
     private var isDraining = false
@@ -127,6 +132,23 @@ final class ElementResolver {
     // MARK: - AX queries (background queue only)
 
     private func hitTest(at point: CGPoint) -> ResolvedElement? {
+        // Resolve the element under the cursor. Cross-process AX calls are MIG
+        // messages and safe off-main; the copy-at-position hit-test is safe
+        // even when it lands on our own process. But the *attribute* queries
+        // below are serviced synchronously in-process for our own windows
+        // (Sparkle's update dialog, the settings window), and touching an
+        // AppKit view off the main thread — e.g. an NSImageView still doing
+        // async image preparation for the app icon — trips an assertion and
+        // aborts. So if the element belongs to us, redo the whole resolution
+        // on the main thread before querying anything about it.
+        var elementRef: AXUIElement?
+        let error = AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &elementRef)
+        guard error == .success, let element = elementRef else { return nil }
+
+        if !Thread.isMainThread, elementPID(element) == ownPID {
+            return DispatchQueue.main.sync { hitTest(at: point) }
+        }
+
         // Web overlay popups (Chromium/Electron menus, selects) defeat the
         // window-server hit-test: it frequently reports the elements *behind*
         // the popup. While such a popup is open it holds accessibility focus,
@@ -142,10 +164,6 @@ final class ElementResolver {
             chrome.actions = []
             return chrome
         }
-
-        var elementRef: AXUIElement?
-        let error = AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &elementRef)
-        guard error == .success, let element = elementRef else { return nil }
 
         let resolved = makeResolved(element)
         if isClickable(resolved) {
@@ -319,6 +337,15 @@ final class ElementResolver {
             }
         }
         return nil
+    }
+
+    /// The process id owning an AX element. `AXUIElementGetPid` reads the pid
+    /// stored in the element — it doesn't message the target app — so it's
+    /// safe on the background queue even for our own process.
+    private func elementPID(_ element: AXUIElement) -> pid_t {
+        var pid: pid_t = 0
+        AXUIElementGetPid(element, &pid)
+        return pid
     }
 
     private func isClickable(_ resolved: ResolvedElement) -> Bool {
