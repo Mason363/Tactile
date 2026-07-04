@@ -563,6 +563,7 @@ struct KeyboardSettingsView: View {
                 }
             }
             .disabled(!settings.keyboardHapticsEnabled)
+            .opacity(settings.keyboardHapticsEnabled ? 1 : 0.45)
 
             Section {
                 ForEach(settings.keyCombos) { combo in
@@ -592,6 +593,7 @@ struct KeyboardSettingsView: View {
                     .foregroundStyle(.secondary)
             }
             .disabled(!settings.keyboardHapticsEnabled)
+            .opacity(settings.keyboardHapticsEnabled ? 1 : 0.45)
 
             Section {
                 Label("Keys are compared on your Mac and discarded. Nothing is stored or sent.", systemImage: "lock.shield.fill")
@@ -891,6 +893,12 @@ struct SoundSettingsView: View {
     @State private var customSounds = AudioFeedbackEngine.customSounds()
     @State private var importError: String?
     @State private var previewEngine = AudioFeedbackEngine()
+    @State private var importCandidate: ImportCandidate?
+
+    private struct ImportCandidate: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
 
     var body: some View {
         Form {
@@ -979,9 +987,18 @@ struct SoundSettingsView: View {
                 }
             }
             .disabled(!settings.audioEnabled)
+            .opacity(settings.audioEnabled ? 1 : 0.45)
         }
         .formStyle(.grouped)
         .scrollDisabled(true)
+        .sheet(item: $importCandidate) { candidate in
+            SoundImportView(url: candidate.url) { identifier in
+                customSounds = AudioFeedbackEngine.customSounds()
+                settings.audioSoundName = identifier
+                importError = nil
+            }
+            .environmentObject(settings)
+        }
     }
 
     private func playPreview() {
@@ -995,23 +1012,10 @@ struct SoundSettingsView: View {
     private func importSound() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.audio]
-        panel.allowsMultipleSelection = true
-        panel.message = "Choose short audio files to use as hover clicks"
-        guard panel.runModal() == .OK else { return }
-        var lastImported: String?
-        var failed: [String] = []
-        for url in panel.urls {
-            if let identifier = AudioFeedbackEngine.importSound(from: url) {
-                lastImported = identifier
-            } else {
-                failed.append(url.lastPathComponent)
-            }
-        }
-        customSounds = AudioFeedbackEngine.customSounds()
-        if let lastImported {
-            settings.audioSoundName = lastImported
-        }
-        importError = failed.isEmpty ? nil : "Couldn't play \(failed.joined(separator: ", ")), not imported."
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose an audio file to use as a click"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        importCandidate = ImportCandidate(url: url)
     }
 }
 
