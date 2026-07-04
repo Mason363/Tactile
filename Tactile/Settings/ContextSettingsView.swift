@@ -55,6 +55,30 @@ struct ContextSettingsView: View {
 
             Section {
                 HStack {
+                    Toggle("Scroll haptics", isOn: $settings.scrollHapticsEnabled)
+                    Spacer()
+                    WaveformControl(waveform: $settings.scrollWaveform, accessibilityName: "scrolling")
+                        .disabled(!settings.scrollHapticsEnabled)
+                }
+                LabeledSlider(
+                    title: "Tick every",
+                    value: $settings.scrollLines,
+                    range: 1...20,
+                    step: 1,
+                    format: { "\(Int($0)) line\(Int($0) == 1 ? "" : "s")" },
+                    caption: nil
+                )
+                .disabled(!settings.scrollHapticsEnabled)
+            } header: {
+                Text("Scrolling")
+            } footer: {
+                Text("Feel scrolling go by, like the detents of a clicky scroll wheel.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                HStack {
                     Toggle("Screen edges", isOn: $settings.screenEdgesEnabled)
                     Spacer()
                     WaveformControl(waveform: $settings.edgeWaveform, accessibilityName: "screen edges")

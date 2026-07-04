@@ -24,6 +24,7 @@ enum HapticPreview {
 
 private enum WaveformChoice: Hashable {
     case preset(WaveformPreset)
+    case saved(UUID)
     case custom
 }
 
@@ -38,10 +39,21 @@ struct WaveformControl: View {
 
     private var choice: Binding<WaveformChoice> {
         Binding(
-            get: { WaveformPreset.matching(waveform).map(WaveformChoice.preset) ?? .custom },
+            get: {
+                if let preset = WaveformPreset.matching(waveform) { return .preset(preset) }
+                if let saved = settings.customHaptics.first(where: { $0.waveform == waveform }) { return .saved(saved.id) }
+                return .custom
+            },
             set: { newValue in
-                if case .preset(let preset) = newValue {
+                switch newValue {
+                case .preset(let preset):
                     waveform = preset.waveform
+                case .saved(let id):
+                    if let haptic = settings.customHaptics.first(where: { $0.id == id }) {
+                        waveform = haptic.waveform
+                    }
+                case .custom:
+                    break
                 }
             }
         )
@@ -52,6 +64,12 @@ struct WaveformControl: View {
             Picker("Waveform for \(accessibilityName)", selection: choice) {
                 ForEach(WaveformPreset.allCases) { preset in
                     Text(preset.displayName).tag(WaveformChoice.preset(preset))
+                }
+                if !settings.customHaptics.isEmpty {
+                    Divider()
+                    ForEach(settings.customHaptics) { haptic in
+                        Text(haptic.name).tag(WaveformChoice.saved(haptic.id))
+                    }
                 }
                 Text("Custom").tag(WaveformChoice.custom)
             }

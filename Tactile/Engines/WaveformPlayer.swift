@@ -18,7 +18,7 @@ final class WaveformPlayer {
         self.engine = engine
         var fireAt: TimeInterval = 0
         for (index, step) in waveform.steps.enumerated() {
-            let strength = step.strength
+            let strength = step.effectiveStrength
             if index == 0 {
                 engine.tick(strength)
             } else {

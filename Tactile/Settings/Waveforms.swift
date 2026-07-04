@@ -11,8 +11,29 @@ struct WaveformStep: Codable, Identifiable {
     var strength: FeedbackPattern
     /// Pause after this pulse before the next one, in milliseconds.
     var gapMs: Double
+    /// Fine strength, 0-100. When set it wins over `strength`, playing at
+    /// the nearest level the trackpad supports. Optional so waveforms saved
+    /// before it existed still decode.
+    var percent: Double?
 
-    private enum CodingKeys: String, CodingKey { case strength, gapMs }
+    private enum CodingKeys: String, CodingKey { case strength, gapMs, percent }
+
+    /// The level to actually play: percent mapped onto the supported
+    /// strengths, or the coarse strength when no percent is set.
+    var effectiveStrength: FeedbackPattern {
+        guard let percent else { return strength }
+        if percent <= 40 { return .alignment }
+        if percent <= 75 { return .generic }
+        return .levelChange
+    }
+}
+
+/// A user-composed haptic with a name, made in the Studio pane and offered
+/// in every waveform picker.
+struct CustomHaptic: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var name: String
+    var waveform: HapticWaveform
 }
 
 /// A haptic waveform: an ordered sequence of pulses. Everything Tactile
@@ -22,7 +43,7 @@ struct HapticWaveform: Codable, Equatable {
 
     static func == (lhs: HapticWaveform, rhs: HapticWaveform) -> Bool {
         lhs.steps.count == rhs.steps.count && zip(lhs.steps, rhs.steps).allSatisfy {
-            $0.strength == $1.strength && $0.gapMs == $1.gapMs
+            $0.strength == $1.strength && $0.gapMs == $1.gapMs && $0.percent == $1.percent
         }
     }
 

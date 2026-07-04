@@ -48,6 +48,10 @@ final class CursorMonitor {
 
     /// Fires once each time the cursor touches an outer screen edge.
     var onScreenEdge: (() -> Void)?
+
+    /// Called with every scroll's line delta, for scroll haptics. The
+    /// accumulation and stride live downstream in FeedbackController.
+    var onScroll: ((Double) -> Void)?
     var screenEdgesEnabled = false
     private var atScreenEdge = false
 
@@ -124,7 +128,7 @@ final class CursorMonitor {
             callback: { _, type, event, userInfo in
                 if let userInfo {
                     let monitor = Unmanaged<CursorMonitor>.fromOpaque(userInfo).takeUnretainedValue()
-                    monitor.handleTapEvent(type: type)
+                    monitor.handleTapEvent(type: type, event: event)
                 }
                 return Unmanaged.passUnretained(event)
             },
@@ -142,12 +146,14 @@ final class CursorMonitor {
         return true
     }
 
-    private func handleTapEvent(type: CGEventType) {
+    private func handleTapEvent(type: CGEventType, event: CGEvent) {
         switch type {
         case .mouseMoved, .leftMouseDragged:
             handleMove()
         case .scrollWheel:
-            handleScroll()
+            // Fixed-point delta carries fractional lines from trackpad
+            // momentum scrolling; the integer field would round them away.
+            handleScroll(lines: event.getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1))
         case .leftMouseUp, .rightMouseUp:
             handleClick()
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
@@ -181,8 +187,8 @@ final class CursorMonitor {
         }
         // Scrolling changes what's under a stationary cursor, so it must
         // invalidate the skip region and trigger a fresh sample.
-        globalScrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.scrollWheel]) { [weak self] _ in
-            self?.handleScroll()
+        globalScrollMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.scrollWheel]) { [weak self] event in
+            self?.handleScroll(lines: Double(event.deltaY))
         }
         globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp, .rightMouseUp]) { [weak self] _ in
             self?.handleClick()
@@ -205,7 +211,8 @@ final class CursorMonitor {
         sample(now: now)
     }
 
-    private func handleScroll() {
+    private func handleScroll(lines: Double) {
+        if lines != 0 { onScroll?(lines) }
         skipRegion = nil
         handleMove()
     }

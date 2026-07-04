@@ -38,9 +38,10 @@ struct MenuBarView: View {
         if !settings.profiles.isEmpty {
             Menu("Profiles") {
                 ForEach(settings.profiles) { profile in
-                    Button(profile.name) {
-                        settings.apply(profile.snapshot)
-                    }
+                    Toggle(profile.name, isOn: Binding(
+                        get: { settings.activeProfileID == profile.id },
+                        set: { _ in settings.applyProfile(profile) }
+                    ))
                 }
             }
         }

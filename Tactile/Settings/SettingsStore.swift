@@ -155,7 +155,16 @@ struct FeedbackConfig {
     var audioEnabled: Bool
     var audioVolume: Double
     var audioSoundName: String
+    var audioPitch: Double
+    var audioToneVariation: Bool
+    /// Per-category sound assignment: "default" follows the Sound pane,
+    /// "none" is silent, anything else is a sound identifier.
+    var categorySounds: [FeedbackCategory: String]
     var keyboardWaveform: HapticWaveform
+    var keyboardSound: String
+    var scrollEnabled: Bool
+    var scrollLines: Double
+    var scrollWaveform: HapticWaveform
 }
 
 /// Everything user-configurable, as one Codable value - the unit of
@@ -212,6 +221,15 @@ struct SettingsSnapshot: Codable {
     var keyboardModifierKeys: Bool? = false
     var keyboardWaveform: HapticWaveform? = WaveformPreset.tap.waveform
     var keyCombos: [KeyCombo]? = []
+    var keyboardSound: String? = "none"
+    // Sound styling and per-category sounds.
+    var audioPitch: Double? = 1.0
+    var audioToneVariation: Bool? = false
+    var categorySounds: [String: String]? = [:]
+    // Scroll haptics.
+    var scrollHapticsEnabled: Bool? = false
+    var scrollLines: Double? = 3
+    var scrollWaveform: HapticWaveform? = WaveformPreset.lightTap.waveform
 }
 
 struct SettingsProfile: Codable, Identifiable {
@@ -437,6 +455,58 @@ final class SettingsStore: ObservableObject {
         didSet { setCodable(keyCombos, forKey: "keyCombos") }
     }
 
+    /// Sound for keyboard haptics: "none", "default", or an identifier.
+    @Published var keyboardSound: String {
+        didSet { defaults.set(keyboardSound, forKey: "keyboardSound") }
+    }
+
+    /// Pitch multiplier for the synthesized click styles.
+    @Published var audioPitch: Double {
+        didSet { defaults.set(audioPitch, forKey: "audioPitch") }
+    }
+
+    /// Vary the pitch a little on every click, for a natural feel.
+    @Published var audioToneVariation: Bool {
+        didSet { defaults.set(audioToneVariation, forKey: "audioToneVariation") }
+    }
+
+    /// Per-category sound assignment ("default" / "none" / identifier).
+    @Published var categorySounds: [FeedbackCategory: String] {
+        didSet {
+            for (category, sound) in categorySounds {
+                defaults.set(sound, forKey: "category.\(category.rawValue).sound")
+            }
+        }
+    }
+
+    /// Scroll haptics: tick every N lines of scrolling.
+    @Published var scrollHapticsEnabled: Bool {
+        didSet { defaults.set(scrollHapticsEnabled, forKey: "scrollHapticsEnabled") }
+    }
+
+    @Published var scrollLines: Double {
+        didSet { defaults.set(scrollLines, forKey: "scrollLines") }
+    }
+
+    @Published var scrollWaveform: HapticWaveform {
+        didSet { setCodable(scrollWaveform, forKey: "scrollWaveform") }
+    }
+
+    /// Haptics composed in the Studio pane, offered in every waveform picker.
+    @Published var customHaptics: [CustomHaptic] {
+        didSet { setCodable(customHaptics, forKey: "customHaptics") }
+    }
+
+    /// Per-app profile assignment: bundle ID to profile ID.
+    @Published var appProfiles: [String: UUID] {
+        didSet { setCodable(appProfiles, forKey: "appProfiles") }
+    }
+
+    /// The profile whose snapshot was applied last, for the menu bar checkmark.
+    @Published var activeProfileID: UUID? {
+        didSet { defaults.set(activeProfileID?.uuidString, forKey: "activeProfileID") }
+    }
+
     @Published var pollingHz: Double {
         didSet { defaults.set(pollingHz, forKey: "pollingHz") }
     }
@@ -512,6 +582,20 @@ final class SettingsStore: ObservableObject {
         keyboardModifierKeys = defaults.object(forKey: "keyboardModifierKeys") as? Bool ?? false
         keyboardWaveform = Self.codable(defaults, "keyboardWaveform") ?? WaveformPreset.tap.waveform
         keyCombos = Self.codable(defaults, "keyCombos") ?? []
+        keyboardSound = defaults.string(forKey: "keyboardSound") ?? "none"
+        audioPitch = defaults.object(forKey: "audioPitch") as? Double ?? 1.0
+        audioToneVariation = defaults.object(forKey: "audioToneVariation") as? Bool ?? false
+        var sounds: [FeedbackCategory: String] = [:]
+        for category in FeedbackCategory.allCases {
+            sounds[category] = defaults.string(forKey: "category.\(category.rawValue).sound") ?? "default"
+        }
+        categorySounds = sounds
+        scrollHapticsEnabled = defaults.object(forKey: "scrollHapticsEnabled") as? Bool ?? false
+        scrollLines = defaults.object(forKey: "scrollLines") as? Double ?? 3
+        scrollWaveform = Self.codable(defaults, "scrollWaveform") ?? WaveformPreset.lightTap.waveform
+        customHaptics = Self.codable(defaults, "customHaptics") ?? []
+        appProfiles = Self.codable(defaults, "appProfiles") ?? [:]
+        activeProfileID = defaults.string(forKey: "activeProfileID").flatMap(UUID.init(uuidString:))
         pollingHz = defaults.object(forKey: "pollingHz") as? Double ?? 60
         noLagMode = defaults.object(forKey: "noLagMode") as? Bool ?? false
         profiles = Self.codable(defaults, "profiles") ?? []
@@ -544,7 +628,14 @@ final class SettingsStore: ObservableObject {
             audioEnabled: audioEnabled,
             audioVolume: audioVolume,
             audioSoundName: audioSoundName,
-            keyboardWaveform: keyboardWaveform
+            audioPitch: audioPitch,
+            audioToneVariation: audioToneVariation,
+            categorySounds: categorySounds,
+            keyboardWaveform: keyboardWaveform,
+            keyboardSound: keyboardSound,
+            scrollEnabled: scrollHapticsEnabled,
+            scrollLines: scrollLines,
+            scrollWaveform: scrollWaveform
         )
     }
 
@@ -599,6 +690,13 @@ final class SettingsStore: ObservableObject {
         snapshot.keyboardModifierKeys = keyboardModifierKeys
         snapshot.keyboardWaveform = keyboardWaveform
         snapshot.keyCombos = keyCombos
+        snapshot.keyboardSound = keyboardSound
+        snapshot.audioPitch = audioPitch
+        snapshot.audioToneVariation = audioToneVariation
+        snapshot.categorySounds = Dictionary(uniqueKeysWithValues: categorySounds.map { ($0.key.rawValue, $0.value) })
+        snapshot.scrollHapticsEnabled = scrollHapticsEnabled
+        snapshot.scrollLines = scrollLines
+        snapshot.scrollWaveform = scrollWaveform
         return snapshot
     }
 
@@ -656,6 +754,75 @@ final class SettingsStore: ObservableObject {
         keyboardModifierKeys = snapshot.keyboardModifierKeys ?? false
         keyboardWaveform = snapshot.keyboardWaveform ?? WaveformPreset.tap.waveform
         keyCombos = snapshot.keyCombos ?? []
+        keyboardSound = snapshot.keyboardSound ?? "none"
+        audioPitch = snapshot.audioPitch ?? 1.0
+        audioToneVariation = snapshot.audioToneVariation ?? false
+        var sounds: [FeedbackCategory: String] = [:]
+        for category in FeedbackCategory.allCases {
+            sounds[category] = snapshot.categorySounds?[category.rawValue] ?? "default"
+        }
+        categorySounds = sounds
+        scrollHapticsEnabled = snapshot.scrollHapticsEnabled ?? false
+        scrollLines = snapshot.scrollLines ?? 3
+        scrollWaveform = snapshot.scrollWaveform ?? WaveformPreset.lightTap.waveform
+    }
+
+    // MARK: - Profiles
+
+    /// A user-chosen profile switch: applies the snapshot, remembers the
+    /// choice for the menu bar checkmark, and ends any per-app override
+    /// (an explicit pick wins over the automatic switching).
+    func applyProfile(_ profile: SettingsProfile) {
+        perAppBaselineData = nil
+        apply(profile.snapshot)
+        activeProfileID = profile.id
+    }
+
+    // MARK: - Per-app profile override
+
+    /// The settings as they were before a per-app profile took over,
+    /// persisted so a quit or crash mid-override can't strand the override
+    /// as the user's real settings.
+    private struct PerAppBaseline: Codable {
+        var snapshot: SettingsSnapshot
+        var activeProfileID: UUID?
+    }
+
+    private var perAppBaselineData: Data? {
+        get { defaults.data(forKey: "perAppBaseline") }
+        set {
+            if let newValue { defaults.set(newValue, forKey: "perAppBaseline") }
+            else { defaults.removeObject(forKey: "perAppBaseline") }
+        }
+    }
+
+    /// Called when the frontmost app has an assigned profile. Saves the
+    /// current settings once, then applies the app's profile.
+    func beginPerAppOverride(applying profile: SettingsProfile) {
+        if perAppBaselineData == nil {
+            let baseline = PerAppBaseline(snapshot: makeSnapshot(), activeProfileID: activeProfileID)
+            perAppBaselineData = try? JSONEncoder().encode(baseline)
+        }
+        guard activeProfileID != profile.id else { return }
+        apply(profile.snapshot)
+        activeProfileID = profile.id
+    }
+
+    /// Called when the frontmost app has no assigned profile: puts the
+    /// pre-override settings back.
+    func endPerAppOverride() {
+        guard let data = perAppBaselineData,
+              let baseline = try? JSONDecoder().decode(PerAppBaseline.self, from: data)
+        else { return }
+        perAppBaselineData = nil
+        apply(baseline.snapshot)
+        activeProfileID = baseline.activeProfileID
+    }
+
+    /// Restores a stranded override on launch (the app quit while a per-app
+    /// profile was active). Call once after init.
+    func restoreStrandedOverride() {
+        endPerAppOverride()
     }
 
     // MARK: - Codable persistence helpers

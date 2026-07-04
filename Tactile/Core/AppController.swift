@@ -60,6 +60,9 @@ final class AppController: ObservableObject {
         cursorMonitor.onScreenEdge = { [weak self] in
             self?.feedback.screenEdgeBump()
         }
+        cursorMonitor.onScroll = { [weak self] lines in
+            self?.feedback.handleScrollDelta(lines)
+        }
         resolver.onResolve = { [weak self] point, resolved in
             self?.feedback.handle(point: point, resolved: resolved)
         }
@@ -126,6 +129,10 @@ final class AppController: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.frontmostDidChange() }
             .store(in: &cancellables)
+
+        // If the app quit while a per-app profile was active, put the
+        // user's own settings back before anything else runs.
+        settings.restoreStrandedOverride()
 
         frontmostDidChange()
         refreshPipelineState()
@@ -277,6 +284,22 @@ final class AppController: ObservableObject {
         if !frontmostIsBridgedBrowser {
             // Left the browser: forget any half-entered web element.
             feedback.reset()
+        }
+        applyPerAppProfile(for: bundleID)
+    }
+
+    /// Per-app profiles: entering an app with an assigned profile applies it
+    /// (saving the current settings first); entering an unassigned app puts
+    /// them back. Tactile itself is neutral, so opening Settings to tweak
+    /// while testing another app never flips the profile underfoot.
+    private func applyPerAppProfile(for bundleID: String?) {
+        guard bundleID != Bundle.main.bundleIdentifier else { return }
+        if let bundleID,
+           let profileID = settings.appProfiles[bundleID],
+           let profile = settings.profiles.first(where: { $0.id == profileID }) {
+            settings.beginPerAppOverride(applying: profile)
+        } else {
+            settings.endPerAppOverride()
         }
     }
 }

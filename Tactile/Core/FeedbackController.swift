@@ -39,6 +39,8 @@ final class FeedbackController {
     /// in-flight hover waveform (and vice versa).
     private let keyPlayer = WaveformPlayer()
     private var lastKeyTickTime: CFTimeInterval = 0
+    /// Lines scrolled since the last scroll tick.
+    private var scrollAccumulator: Double = 0
 
     private var lastElement: AXUIElement?
     private var lastWindow: AXUIElement?
@@ -188,7 +190,7 @@ final class FeedbackController {
         // so you can feel that something is there but inactive.
         if !resolved.enabled {
             if config.feelDisabled, config.enabledCategories.contains(category), passesFocusFilter(category, resolved) {
-                play(.single(.alignment), reason: "disabled")
+                play(.single(.alignment), reason: "disabled", sound: categorySound(category))
             }
             return
         }
@@ -196,6 +198,7 @@ final class FeedbackController {
         guard firesOnEnter else { return }
 
         let waveform = styledWaveform(for: category, resolved: resolved)
+        let sound = categorySound(category)
         let firedRegion = resolved.frame.map { FireRegion(frame: $0, pid: resolved.pid) }
         // Only a fire that HAS a destination replaces the link memory: an
         // interleaved generic fire (a card's pressable wrapper) must not
@@ -205,7 +208,7 @@ final class FeedbackController {
             dwellTimer = Timer.scheduledTimer(withTimeInterval: config.dwellDelay, repeats: false) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    self.play(waveform)
+                    self.play(waveform, sound: sound)
                     self.firedForCurrentElement = true
                     self.activeFireRegion = firedRegion
                     if let firedURL { self.lastFiredLinkURL = firedURL }
@@ -213,7 +216,7 @@ final class FeedbackController {
                 }
             }
         } else {
-            play(waveform)
+            play(waveform, sound: sound)
             log.debug("fired-geom path=ax cat=\(category.rawValue, privacy: .public) frame=\(resolved.frame.map(Self.geom) ?? "-", privacy: .public) point=\(Int(point.x)),\(Int(point.y), privacy: .public)")
             firedForCurrentElement = true
             activeFireRegion = firedRegion
@@ -317,17 +320,18 @@ final class FeedbackController {
         guard passes else { return }
 
         if !enabled {
-            if config.feelDisabled { play(.single(.alignment), reason: "disabled") }
+            if config.feelDisabled { play(.single(.alignment), reason: "disabled", sound: categorySound(category)) }
             return
         }
 
         let waveform = bridgeWaveform(category: category, isOn: message.on, isDanger: message.danger ?? false)
+        let sound = categorySound(category)
         let firedRegion = rect.map { FireRegion(frame: $0, pid: nil) }
         if config.dwellDelay > 0 {
             dwellTimer = Timer.scheduledTimer(withTimeInterval: config.dwellDelay, repeats: false) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    self.play(waveform, reason: "bridge")
+                    self.play(waveform, reason: "bridge", sound: sound)
                     self.firedForCurrentElement = true
                     self.activeFireRegion = firedRegion
                     if let rect { self.onSkipRegionUpdate?(rect) }
@@ -335,7 +339,7 @@ final class FeedbackController {
                 }
             }
         } else {
-            play(waveform, reason: "bridge")
+            play(waveform, reason: "bridge", sound: sound)
             log.debug("fired-geom path=bridge el=\(raw, privacy: .public) rect=\(rect.map(Self.geom) ?? "-", privacy: .public)")
             firedForCurrentElement = true
             activeFireRegion = firedRegion
@@ -423,6 +427,20 @@ final class FeedbackController {
         log.debug("fire reason=keyboard steps=\(chosen.steps.count, privacy: .public)")
         keyPlayer.play(chosen, on: hapticEngine)
         onFire?()
+        if let sound = resolvedSound(assigned: config.keyboardSound) {
+            playSound(sound, strength: chosen.steps.first?.effectiveStrength ?? .generic)
+        }
+    }
+
+    /// Scroll haptics: accumulates scroll distance in lines and ticks each
+    /// time it crosses the configured stride.
+    func handleScrollDelta(_ lines: Double) {
+        guard config.scrollEnabled else { return }
+        scrollAccumulator += abs(lines)
+        let stride = max(config.scrollLines, 0.5)
+        guard scrollAccumulator >= stride else { return }
+        scrollAccumulator = scrollAccumulator.truncatingRemainder(dividingBy: stride)
+        play(config.scrollWaveform, reason: "scroll", sound: .some(nil))
     }
 
     /// Forgets the current element so re-entering it ticks again.
@@ -438,6 +456,7 @@ final class FeedbackController {
         stopVibration()
         player.cancel()
         keyPlayer.cancel()
+        scrollAccumulator = 0
     }
 
     // MARK: - Waveform selection
@@ -551,7 +570,9 @@ final class FeedbackController {
 
     // MARK: - Playback
 
-    private func play(_ waveform: HapticWaveform, reason: StaticString = "enter") {
+    /// `sound`: outer nil means the global default (the Sound pane); inner
+    /// nil means explicitly silent; a name plays that sound.
+    private func play(_ waveform: HapticWaveform, reason: StaticString = "enter", sound: String?? = nil) {
         let now = CACurrentMediaTime()
         guard config.rateLimitInterval == 0 || now - lastTickTime >= config.rateLimitInterval else { return }
         lastTickTime = now
@@ -559,11 +580,37 @@ final class FeedbackController {
 
         player.play(waveform, on: hapticEngine)
         onFire?()
-        if config.audioEnabled {
-            audio.volume = config.audioVolume
-            audio.soundName = config.audioSoundName
-            audio.tick(waveform.steps.first?.strength ?? .generic)
+
+        let soundName: String?
+        switch sound {
+        case .none: soundName = config.audioEnabled ? config.audioSoundName : nil
+        case .some(let assigned): soundName = assigned
         }
+        if let soundName {
+            playSound(soundName, strength: waveform.steps.first?.effectiveStrength ?? .generic)
+        }
+    }
+
+    private func playSound(_ name: String, strength: FeedbackPattern) {
+        audio.volume = config.audioVolume
+        audio.soundName = name
+        audio.pitch = config.audioPitch
+        audio.varyTone = config.audioToneVariation
+        audio.tick(strength)
+    }
+
+    /// Resolves an assigned sound: "default" follows the Sound pane, "none"
+    /// is silent, anything else plays regardless of the master toggle.
+    private func resolvedSound(assigned: String) -> String? {
+        switch assigned {
+        case "default": return config.audioEnabled ? config.audioSoundName : nil
+        case "none": return nil
+        default: return assigned
+        }
+    }
+
+    private func categorySound(_ category: FeedbackCategory) -> String? {
+        resolvedSound(assigned: config.categorySounds[category] ?? "default")
     }
 
     // MARK: - Hover vibration

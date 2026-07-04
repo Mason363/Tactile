@@ -17,6 +17,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     case haptics
     case vibration
     case keyboard
+    case studio
     case context
     case visual
     case sound
@@ -34,6 +35,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .haptics: return "Haptics"
         case .vibration: return "Vibration"
         case .keyboard: return "Keyboard"
+        case .studio: return "Haptic Studio"
         case .context: return "Context"
         case .visual: return "Visual Aids"
         case .sound: return "Sound"
@@ -51,7 +53,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .haptics: return "Which elements you feel, and how."
         case .vibration: return "A continuous buzz while resting on an element."
         case .keyboard: return "Feel keys and shortcuts as you type."
-        case .context: return "Danger, state, hover-out, and spatial feel."
+        case .studio: return "Compose and save your own haptics."
+        case .context: return "Danger, state, hover-out, scrolling, and spatial feel."
         case .visual: return "See what you feel."
         case .sound: return "An audible click alongside the haptics."
         case .performance: return "Responsiveness and resource trade-offs."
@@ -68,6 +71,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .haptics: return "cursorarrow.rays"
         case .vibration: return "waveform.path"
         case .keyboard: return "keyboard.fill"
+        case .studio: return "slider.vertical.3"
         case .context: return "exclamationmark.triangle.fill"
         case .visual: return "eye.fill"
         case .sound: return "speaker.wave.2.fill"
@@ -85,6 +89,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .haptics: return .blue
         case .vibration: return .purple
         case .keyboard: return .mint
+        case .studio: return .red
         case .context: return .orange
         case .visual: return .green
         case .sound: return .pink
@@ -110,6 +115,7 @@ struct SettingsView: View {
                     sidebarRow(.haptics)
                     sidebarRow(.vibration)
                     sidebarRow(.keyboard)
+                    sidebarRow(.studio)
                     sidebarRow(.context)
                     sidebarRow(.visual)
                     sidebarRow(.sound)
@@ -157,6 +163,7 @@ struct SettingsView: View {
         case .haptics: HapticsSettingsView()
         case .vibration: VibrationSettingsView()
         case .keyboard: KeyboardSettingsView()
+        case .studio: HapticStudioView()
         case .context: ContextSettingsView()
         case .visual: VisualAidsView()
         case .sound: SoundSettingsView()
@@ -336,6 +343,13 @@ private struct CategoryRow: View {
         )
     }
 
+    private var sound: Binding<String> {
+        Binding(
+            get: { settings.categorySounds[category] ?? "default" },
+            set: { settings.categorySounds[category] = $0 }
+        )
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: category.symbol)
@@ -352,8 +366,42 @@ private struct CategoryRow: View {
 
             WaveformControl(waveform: waveform, accessibilityName: category.displayName)
                 .disabled(!isEnabled.wrappedValue)
+
+            SoundPicker(selection: sound, accessibilityName: category.displayName)
+                .disabled(!isEnabled.wrappedValue)
         }
         .padding(.vertical, 1)
+    }
+}
+
+/// Sound assignment menu used beside every waveform picker. "Default"
+/// follows the Sound pane; "None" is silent; a specific sound always plays.
+struct SoundPicker: View {
+    @Binding var selection: String
+    var accessibilityName: String
+
+    var body: some View {
+        Picker("Sound for \(accessibilityName)", selection: $selection) {
+            Text("Default").tag("default")
+            Text("None").tag("none")
+            Divider()
+            ForEach(AudioFeedbackEngine.synthSounds, id: \.self) { identifier in
+                Text(AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
+            }
+            Divider()
+            ForEach(AudioFeedbackEngine.availableSounds, id: \.self) { name in
+                Text(name).tag(name)
+            }
+            let custom = AudioFeedbackEngine.customSounds()
+            if !custom.isEmpty {
+                Divider()
+                ForEach(custom, id: \.self) { identifier in
+                    Text(AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
+                }
+            }
+        }
+        .labelsHidden()
+        .fixedSize()
     }
 }
 
@@ -508,7 +556,13 @@ struct KeyboardSettingsView: View {
                     Spacer()
                     WaveformControl(waveform: $settings.keyboardWaveform, accessibilityName: "Keyboard")
                 }
+                HStack {
+                    Text("Sound")
+                    Spacer()
+                    SoundPicker(selection: $settings.keyboardSound, accessibilityName: "Keyboard")
+                }
             }
+            .disabled(!settings.keyboardHapticsEnabled)
 
             Section {
                 ForEach(settings.keyCombos) { combo in
@@ -537,6 +591,7 @@ struct KeyboardSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            .disabled(!settings.keyboardHapticsEnabled)
 
             Section {
                 Label("Keys are compared on your Mac and discarded. Nothing is stored or sent.", systemImage: "lock.shield.fill")
@@ -848,18 +903,44 @@ struct SoundSettingsView: View {
 
             Section {
                 Picker("Sound", selection: $settings.audioSoundName) {
-                    ForEach(AudioFeedbackEngine.availableSounds, id: \.self) { name in
-                        Text(name).tag(name)
+                    Section("Synthesized") {
+                        ForEach(AudioFeedbackEngine.synthSounds, id: \.self) { identifier in
+                            Text(AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
+                        }
+                    }
+                    Section("System") {
+                        ForEach(AudioFeedbackEngine.availableSounds, id: \.self) { name in
+                            Text(name).tag(name)
+                        }
                     }
                     if !customSounds.isEmpty {
-                        Divider()
-                        ForEach(customSounds, id: \.self) { identifier in
-                            Text(AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
+                        Section("Imported") {
+                            ForEach(customSounds, id: \.self) { identifier in
+                                Text(AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
+                            }
                         }
                     }
                 }
                 .onChange(of: settings.audioSoundName) { _, _ in
                     playPreview()
+                }
+
+                if SynthClickEngine.Style(identifier: settings.audioSoundName) != nil {
+                    LabeledSlider(
+                        title: "Pitch",
+                        value: $settings.audioPitch,
+                        range: 0.5...2.0,
+                        step: 0.05,
+                        format: { String(format: "%.2fx", $0) },
+                        caption: nil
+                    )
+                    .onChange(of: settings.audioPitch) { _, _ in
+                        playPreview()
+                    }
+                    Toggle("Vary the tone a little on each click", isOn: $settings.audioToneVariation)
+                        .onChange(of: settings.audioToneVariation) { _, _ in
+                            playPreview()
+                        }
                 }
 
                 LabeledSlider(
@@ -892,7 +973,7 @@ struct SoundSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 } else {
-                    Text("Picking a sound plays it. Short sounds work best.")
+                    Text("Picking a sound plays it. Short sounds work best. Each element type can also pick its own sound in Haptics.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -906,6 +987,8 @@ struct SoundSettingsView: View {
     private func playPreview() {
         previewEngine.volume = settings.audioVolume
         previewEngine.soundName = settings.audioSoundName
+        previewEngine.pitch = settings.audioPitch
+        previewEngine.varyTone = settings.audioToneVariation
         previewEngine.tick(.generic)
     }
 
