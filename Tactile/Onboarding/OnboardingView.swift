@@ -20,6 +20,15 @@ struct OnboardingView: View {
             Text(permission.isTrusted ? "You're All Set" : "Welcome to Tactile")
                 .font(.title.bold())
 
+            if !ActuatorHapticEngine.hasHapticTrackpad {
+                Label("This Mac has no Force Touch trackpad, so Tactile cannot produce haptic feedback. It needs a built-in MacBook trackpad or a Magic Trackpad. The visual aids and click sounds still work.", systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+            }
+
             if permission.isTrusted {
                 Text("Tactile is now running in your menu bar. Move the cursor over buttons, links, and other controls to feel them under your finger.")
                     .multilineTextAlignment(.center)

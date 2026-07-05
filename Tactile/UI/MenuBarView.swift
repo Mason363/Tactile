@@ -12,6 +12,12 @@ struct MenuBarView: View {
     @ObservedObject private var updater = Updater.shared
 
     var body: some View {
+        if !ActuatorHapticEngine.hasHapticTrackpad {
+            Label("No haptic trackpad detected", systemImage: "exclamationmark.triangle.fill")
+            Text("Tactile needs a Force Touch trackpad to produce feedback.")
+            Divider()
+        }
+
         if !permission.isTrusted {
             Button("Grant Accessibility Access…") {
                 OnboardingWindow.show(controller: controller)

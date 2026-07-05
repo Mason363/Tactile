@@ -179,13 +179,13 @@ struct SettingsSnapshot: Codable {
     // Fields added after profiles first shipped are Optional so snapshots
     // saved by older versions still decode; absent means the default.
     var simpleMode: Bool? = false
-    var browserIntegrationEnabled: Bool? = false
+    var browserIntegrationEnabled: Bool? = true
     var hoverCircleEnabled: Bool? = false
-    var hoverCircleDiameter: Double? = 22
+    var hoverCircleDiameter: Double? = 44
     var hoverCircleFilled: Bool? = false
-    var hoverCircleStrokeWidth: Double? = 3
+    var hoverCircleStrokeWidth: Double? = 8
     var elementHighlightEnabled: Bool? = false
-    var elementHighlightWidth: Double? = 3
+    var elementHighlightWidth: Double? = 6.5
     var crosshairEnabled: Bool? = false
     var crosshairWidth: Double? = 2
     var hoverCaptionEnabled: Bool? = false
@@ -543,13 +543,13 @@ final class SettingsStore: ObservableObject {
         excludedBundleIDs = defaults.stringArray(forKey: "excludedBundleIDs") ?? []
         focusedWindowButtonsOnly = defaults.object(forKey: "focusedWindowButtonsOnly") as? Bool ?? false
         simpleMode = defaults.object(forKey: "simpleMode") as? Bool ?? false
-        browserIntegrationEnabled = defaults.object(forKey: "browserIntegrationEnabled") as? Bool ?? false
+        browserIntegrationEnabled = defaults.object(forKey: "browserIntegrationEnabled") as? Bool ?? true
         hoverCircleEnabled = defaults.object(forKey: "hoverCircleEnabled") as? Bool ?? false
-        hoverCircleDiameter = defaults.object(forKey: "hoverCircleDiameter") as? Double ?? 22
+        hoverCircleDiameter = defaults.object(forKey: "hoverCircleDiameter") as? Double ?? 44
         hoverCircleFilled = defaults.object(forKey: "hoverCircleFilled") as? Bool ?? false
-        hoverCircleStrokeWidth = defaults.object(forKey: "hoverCircleStrokeWidth") as? Double ?? 3
+        hoverCircleStrokeWidth = defaults.object(forKey: "hoverCircleStrokeWidth") as? Double ?? 8
         elementHighlightEnabled = defaults.object(forKey: "elementHighlightEnabled") as? Bool ?? false
-        elementHighlightWidth = defaults.object(forKey: "elementHighlightWidth") as? Double ?? 3
+        elementHighlightWidth = defaults.object(forKey: "elementHighlightWidth") as? Double ?? 6.5
         crosshairEnabled = defaults.object(forKey: "crosshairEnabled") as? Bool ?? false
         crosshairWidth = defaults.object(forKey: "crosshairWidth") as? Double ?? 2
         hoverCaptionEnabled = defaults.object(forKey: "hoverCaptionEnabled") as? Bool ?? false
@@ -572,7 +572,10 @@ final class SettingsStore: ObservableObject {
         vibrateRateMs = defaults.object(forKey: "vibrateRateMs") as? Double ?? 50
         vibrationMode = defaults.string(forKey: "vibrationMode").flatMap(VibrationMode.init(rawValue:)) ?? .steady
         vibratePattern = defaults.string(forKey: "vibratePattern").flatMap(FeedbackPattern.init(rawValue:)) ?? .alignment
-        useEnhancedHaptics = defaults.object(forKey: "useEnhancedHaptics") as? Bool ?? false
+        // Enhanced haptics defaults ON where the hardware supports it and OFF
+        // otherwise, so a fresh install feels the richer intensities on Macs
+        // that can and quietly falls back on Macs that cannot.
+        useEnhancedHaptics = defaults.object(forKey: "useEnhancedHaptics") as? Bool ?? ActuatorHapticEngine.hasHapticTrackpad
         audioSoundName = defaults.string(forKey: "audioSoundName") ?? "Pop"
         audioEnabled = defaults.object(forKey: "audioEnabled") as? Bool ?? false
         audioVolume = defaults.object(forKey: "audioVolume") as? Double ?? 0.5
@@ -713,13 +716,13 @@ final class SettingsStore: ObservableObject {
         excludedBundleIDs = snapshot.excludedBundleIDs
         focusedWindowButtonsOnly = snapshot.focusedWindowButtonsOnly
         simpleMode = snapshot.simpleMode ?? false
-        browserIntegrationEnabled = snapshot.browserIntegrationEnabled ?? false
+        browserIntegrationEnabled = snapshot.browserIntegrationEnabled ?? true
         hoverCircleEnabled = snapshot.hoverCircleEnabled ?? false
-        hoverCircleDiameter = snapshot.hoverCircleDiameter ?? 22
+        hoverCircleDiameter = snapshot.hoverCircleDiameter ?? 44
         hoverCircleFilled = snapshot.hoverCircleFilled ?? false
-        hoverCircleStrokeWidth = snapshot.hoverCircleStrokeWidth ?? 3
+        hoverCircleStrokeWidth = snapshot.hoverCircleStrokeWidth ?? 8
         elementHighlightEnabled = snapshot.elementHighlightEnabled ?? false
-        elementHighlightWidth = snapshot.elementHighlightWidth ?? 3
+        elementHighlightWidth = snapshot.elementHighlightWidth ?? 6.5
         crosshairEnabled = snapshot.crosshairEnabled ?? false
         crosshairWidth = snapshot.crosshairWidth ?? 2
         hoverCaptionEnabled = snapshot.hoverCaptionEnabled ?? false

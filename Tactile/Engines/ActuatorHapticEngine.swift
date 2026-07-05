@@ -29,6 +29,13 @@ final class ActuatorHapticEngine: FeedbackEngine {
 
     static let shared: ActuatorHapticEngine? = ActuatorHapticEngine()
 
+    /// True when a Force Touch (haptic) trackpad is present. Opening an
+    /// actuator only succeeds on hardware that can produce haptics, so this
+    /// doubles as the capability check for feedback in general: both the
+    /// enhanced actuator and the public engine need such a trackpad, and
+    /// without one Tactile has nothing to tap.
+    static var hasHapticTrackpad: Bool { shared != nil }
+
     private let actuator: UnsafeMutableRawPointer
     private let actuate: ActuateFunc
     private let closeActuator: OpenCloseFunc

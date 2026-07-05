@@ -33,7 +33,7 @@ enum NativeMessagingManifest {
             "description": "Tactile browser bridge",
             "path": hostExecutablePath,
             "type": "stdio",
-            "allowed_origins": [BridgeConstants.extensionOrigin],
+            "allowed_origins": BridgeConstants.extensionOrigins,
         ]
         do {
             try FileManager.default.createDirectory(

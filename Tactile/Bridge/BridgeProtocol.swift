@@ -51,10 +51,17 @@ struct BridgeMessage: Codable {
 enum BridgeConstants {
     static let hostName = "com.masonchen.tactile.bridge"
 
-    /// The extension's pinned ID (from its manifest `key`).
-    static let extensionID = "fnbpgacidfliigibfomikmdgbblccmie"
+    /// Extension IDs allowed to reach the native-messaging host. The first is
+    /// the unpacked-development ID (pinned by the extension manifest `key`).
+    /// After the extension is published to the Chrome Web Store, append the ID
+    /// the store assigns and ship a new build; then both the store copy and a
+    /// locally loaded copy can reach the host.
+    static let extensionIDs = ["fnbpgacidfliigibfomikmdgbblccmie"]
 
-    static var extensionOrigin: String { "chrome-extension://\(extensionID)/" }
+    /// The primary (development) ID, shown in the load-unpacked instructions.
+    static var extensionID: String { extensionIDs[0] }
+
+    static var extensionOrigins: [String] { extensionIDs.map { "chrome-extension://\($0)/" } }
 
     /// Chrome's per-profile native-messaging host directory (default profile).
     static var chromeNativeHostsDir: URL {
