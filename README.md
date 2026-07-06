@@ -21,6 +21,13 @@ when the cursor reaches a button, link, checkbox, menu, or tab.
 
 </div>
 
+
+
+## Install: [https://github.com/Mason363/Tactile/releases](https://github.com/Mason363/Tactile/releases)
+
+
+<br>
+
 https://github.com/user-attachments/assets/b410fdf5-21cd-40d7-971e-5c15e5669e02
 
 > https://www.youtube.com/watch?v=uhJYkYtZ8AE
@@ -77,17 +84,38 @@ per-element, so continuous use stays under a few percent of one core.
   recorded key combinations, each with its own waveform.
 - **Automatic updates**: via [Sparkle](https://sparkle-project.org).
 
-## **Accessibility**
+## Accessibility
 
+Tactile can also be used as a low-vision aid. Beyond the haptic feedback, it adds
+visual reinforcement for anyone who has trouble tracking a small cursor or
+telling what's interactive on screen:
 
+- **Element highlighting** — an outline traces the exact control under the
+  cursor, so buttons, links, and fields are unambiguous even at a glance.
+- **Crosshair** — a large crosshair easier to keep track of pointer position on screen.
+- **Hover circle** — a colored circle rides under the cursor (green over
+  clickable, red over destructive), reinforcing *what kind* of element you're
+  on before you click.
+- **Labeled elements** - a small label that gives information on the hovered element, such as it's type (link, button, toggle, etc) and where it is from (menu bar, apps, dock, etc).
+
+Together with the haptic tick, this gives low-vision users three independent
+signals — feel, color, and shape — for the same event.
+
+### Crosshair
 https://github.com/user-attachments/assets/39e714b6-001d-41fa-ad16-dd00278f0ac2
 
+### Crosshair & Label
 https://github.com/user-attachments/assets/3d63dd16-311b-4e34-bc6e-0c753deea56e
 
+### Element Highlighting
 https://github.com/user-attachments/assets/be978b1a-c9f5-4f8b-85c8-eac8164a2af8
 
+### Hover Circle
 https://github.com/user-attachments/assets/32005d36-5cf8-4fb2-bb97-1f0e5bf81fd9
 
+To enable these, go to Tactile Settings -> visual aids
+
+<img width="892" height="704" alt="image" src="https://github.com/user-attachments/assets/90cfcdd9-6626-4079-bb2c-757a1151267f" />
 
 ## Requirements
 
