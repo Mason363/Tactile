@@ -21,7 +21,9 @@ when the cursor reaches a button, link, checkbox, menu, or tab.
 
 </div>
 
-> [video - hero demo: the cursor gliding across a real toolbar and sidebar, with an on-screen caption or waveform overlay marking each haptic tick as it lands on a button, link, and menu]
+https://github.com/user-attachments/assets/b410fdf5-21cd-40d7-971e-5c15e5669e02
+
+> https://www.youtube.com/watch?v=uhJYkYtZ8AE
 
 ## How it works
 
@@ -75,9 +77,17 @@ per-element, so continuous use stays under a few percent of one core.
   recorded key combinations, each with its own waveform.
 - **Automatic updates**: via [Sparkle](https://sparkle-project.org).
 
-> [image - the redesigned Settings window, sidebar visible, on the Haptics pane]
+## **Accessibility**
 
-> [image - the Visual Aids pane with its live cursor-circle / element-highlight preview]
+
+https://github.com/user-attachments/assets/39e714b6-001d-41fa-ad16-dd00278f0ac2
+
+https://github.com/user-attachments/assets/3d63dd16-311b-4e34-bc6e-0c753deea56e
+
+https://github.com/user-attachments/assets/be978b1a-c9f5-4f8b-85c8-eac8164a2af8
+
+https://github.com/user-attachments/assets/32005d36-5cf8-4fb2-bb97-1f0e5bf81fd9
+
 
 ## Requirements
 
