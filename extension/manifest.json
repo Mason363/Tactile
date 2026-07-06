@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Tactile Browser Bridge",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Feeds Tactile the real DOM under your cursor, so web controls that never reach macOS accessibility can still be felt.",
   "minimum_chrome_version": "102",
+  "icons": { "16": "icon16.png", "48": "icon48.png", "128": "icon128.png" },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0uZg7l/erY5POoOGKCx2nthtP9C2OmZdvvo3z1ii1pP8BO6G/qkCv0381YVTLbO5N4quw/Xmb02LCT8oYOI8Ao9shxSVcKreuW3CtlijsAgyryD8YdI5U81B7ZT4otr/CmzpANgvXXIMyk5kQHaDjY+Lv4kxfeaQxEboau1k/OEKMg71DoKwxtlyfXCSXN2J6DXiJaM5j/QX2X8iysewonS5hLkB/7Ir7jKcGDsD8E4CU99gbBp+yFgb1OTt2M6imgVE4Q+a0EeqwBfU3iPQ7qtb9hy0mMipzQROPnFe5KM5N/l9sEUlyU4iHvNIdlfDIzekQad51rD5RW8beK2e1wIDAQAB",
   "permissions": ["nativeMessaging"],
   "background": {

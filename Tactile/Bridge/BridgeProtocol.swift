@@ -56,7 +56,10 @@ enum BridgeConstants {
     /// After the extension is published to the Chrome Web Store, append the ID
     /// the store assigns and ship a new build; then both the store copy and a
     /// locally loaded copy can reach the host.
-    static let extensionIDs = ["fnbpgacidfliigibfomikmdgbblccmie"]
+    static let extensionIDs = [
+        "fnbpgacidfliigibfomikmdgbblccmie",   // unpacked development build
+        "bkpkcddffbjipobgjlagggbbldefpldo",   // Chrome Web Store build
+    ]
 
     /// The primary (development) ID, shown in the load-unpacked instructions.
     static var extensionID: String { extensionIDs[0] }
