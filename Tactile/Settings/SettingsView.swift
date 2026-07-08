@@ -234,6 +234,8 @@ struct GeneralSettingsView: View {
 
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginItemError: String?
+    /// Device choices to offer, empty unless several trackpads are connected.
+    @State private var deviceTargets: [HapticDeviceTarget] = []
 
     var body: some View {
         Form {
@@ -256,6 +258,25 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            if deviceTargets.count > 1 {
+                Section("Trackpads") {
+                    Picker("Feel haptics on", selection: $settings.hapticDevice) {
+                        ForEach(deviceTargets) { target in
+                            Text(target.displayName).tag(target)
+                        }
+                    }
+                    .onChange(of: settings.hapticDevice) { _, newValue in
+                        // Tap the new destination so the choice is felt there.
+                        guard let engine = ActuatorHapticEngine.shared else { return }
+                        engine.target = newValue
+                        engine.tick(.generic)
+                    }
+                    Text("Several haptic trackpads are connected. Choose which one ticks; if it disconnects, feedback returns to all of them.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section("Permission") {
                 if permission.isTrusted {
                     Label("Accessibility access granted", systemImage: "checkmark.circle.fill")
@@ -274,6 +295,26 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .scrollDisabled(true)
+        .onAppear(perform: refreshDeviceTargets)
+    }
+
+    /// Re-scans the connected trackpads; the picker exists only while more
+    /// than one is present, offering just the kinds actually connected.
+    private func refreshDeviceTargets() {
+        guard let engine = ActuatorHapticEngine.shared else {
+            deviceTargets = []
+            return
+        }
+        engine.refreshDevices()
+        guard engine.hasMultipleDevices else {
+            deviceTargets = []
+            return
+        }
+        var targets: [HapticDeviceTarget] = [.all]
+        if engine.hasBuiltInDevice { targets.append(.builtIn) }
+        if engine.hasExternalDevice { targets.append(.external) }
+        deviceTargets = targets
+        if !targets.contains(settings.hapticDevice) { settings.hapticDevice = .all }
     }
 }
 
@@ -516,7 +557,13 @@ private struct HoldToFeelButton: View {
         let next = Timer(timeInterval: gap, repeats: false) { _ in
             Task { @MainActor in
                 guard buzzing else { return }
-                SystemHapticEngine().tick(settings.vibratePattern)
+                // A specific device choice routes through the actuator even
+                // without enhanced haptics, matching the live pipeline.
+                if settings.hapticDevice != .all, let actuator = ActuatorHapticEngine.shared {
+                    actuator.tick(settings.vibratePattern)
+                } else {
+                    SystemHapticEngine().tick(settings.vibratePattern)
+                }
                 scheduleTick()
             }
         }

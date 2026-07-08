@@ -126,6 +126,26 @@ enum VibrationMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// Which connected trackpad feels the haptics. Only meaningful when more
+/// than one haptic trackpad is present (a MacBook with a Magic Trackpad
+/// paired); routing to one device goes through the actuator engine, since
+/// the public haptics API reaches every device at once.
+enum HapticDeviceTarget: String, CaseIterable, Identifiable {
+    case all
+    case builtIn
+    case external
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .all: return "All trackpads"
+        case .builtIn: return "Built-in trackpad"
+        case .external: return "Magic Trackpad"
+        }
+    }
+}
+
 /// An immutable snapshot of every setting the feedback pipeline needs.
 /// Rebuilt on the main thread whenever settings change and handed to the
 /// background pipeline, so the pipeline never touches UserDefaults.
@@ -152,6 +172,7 @@ struct FeedbackConfig {
     var vibrationMode: VibrationMode
     var vibratePattern: FeedbackPattern
     var useEnhancedHaptics: Bool
+    var hapticDevice: HapticDeviceTarget
     var audioEnabled: Bool
     var audioVolume: Double
     var audioSoundName: String
@@ -230,6 +251,8 @@ struct SettingsSnapshot: Codable {
     var scrollHapticsEnabled: Bool? = false
     var scrollLines: Double? = 3
     var scrollWaveform: HapticWaveform? = WaveformPreset.lightTap.waveform
+    // Haptic output device.
+    var hapticDevice: String? = HapticDeviceTarget.all.rawValue
 }
 
 struct SettingsProfile: Codable, Identifiable {
@@ -414,6 +437,11 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(useEnhancedHaptics, forKey: "useEnhancedHaptics") }
     }
 
+    /// Which trackpad feels the ticks when more than one is connected.
+    @Published var hapticDevice: HapticDeviceTarget {
+        didSet { defaults.set(hapticDevice.rawValue, forKey: "hapticDevice") }
+    }
+
     @Published var audioSoundName: String {
         didSet { defaults.set(audioSoundName, forKey: "audioSoundName") }
     }
@@ -576,6 +604,7 @@ final class SettingsStore: ObservableObject {
         // otherwise, so a fresh install feels the richer intensities on Macs
         // that can and quietly falls back on Macs that cannot.
         useEnhancedHaptics = defaults.object(forKey: "useEnhancedHaptics") as? Bool ?? ActuatorHapticEngine.hasHapticTrackpad
+        hapticDevice = defaults.string(forKey: "hapticDevice").flatMap(HapticDeviceTarget.init(rawValue:)) ?? .all
         audioSoundName = defaults.string(forKey: "audioSoundName") ?? "Pop"
         audioEnabled = defaults.object(forKey: "audioEnabled") as? Bool ?? false
         audioVolume = defaults.object(forKey: "audioVolume") as? Double ?? 0.5
@@ -628,6 +657,7 @@ final class SettingsStore: ObservableObject {
             vibrationMode: vibrationMode,
             vibratePattern: vibratePattern,
             useEnhancedHaptics: useEnhancedHaptics,
+            hapticDevice: hapticDevice,
             audioEnabled: audioEnabled,
             audioVolume: audioVolume,
             audioSoundName: audioSoundName,
@@ -700,6 +730,7 @@ final class SettingsStore: ObservableObject {
         snapshot.scrollHapticsEnabled = scrollHapticsEnabled
         snapshot.scrollLines = scrollLines
         snapshot.scrollWaveform = scrollWaveform
+        snapshot.hapticDevice = hapticDevice.rawValue
         return snapshot
     }
 
@@ -768,6 +799,7 @@ final class SettingsStore: ObservableObject {
         scrollHapticsEnabled = snapshot.scrollHapticsEnabled ?? false
         scrollLines = snapshot.scrollLines ?? 3
         scrollWaveform = snapshot.scrollWaveform ?? WaveformPreset.lightTap.waveform
+        hapticDevice = snapshot.hapticDevice.flatMap(HapticDeviceTarget.init(rawValue:)) ?? .all
     }
 
     // MARK: - Profiles

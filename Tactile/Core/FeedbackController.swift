@@ -18,7 +18,9 @@ import QuartzCore
 /// waveform, and window-boundary crossings and screen edges have theirs.
 @MainActor
 final class FeedbackController {
-    var config: FeedbackConfig
+    var config: FeedbackConfig {
+        didSet { ActuatorHapticEngine.shared?.target = config.hapticDevice }
+    }
 
     /// Feeds the cursor monitor's skip region after each resolution.
     var onSkipRegionUpdate: ((CGRect?) -> Void)?
@@ -73,8 +75,11 @@ final class FeedbackController {
     private var buzzing = false
 
     /// Enhanced haptics when enabled and supported, public engine otherwise.
+    /// A specific device choice also routes through the actuator: the public
+    /// API always reaches every connected trackpad at once.
     private var hapticEngine: FeedbackEngine {
-        if config.useEnhancedHaptics, let actuator = ActuatorHapticEngine.shared {
+        if let actuator = ActuatorHapticEngine.shared,
+           config.useEnhancedHaptics || config.hapticDevice != .all {
             return actuator
         }
         return haptics
@@ -84,6 +89,7 @@ final class FeedbackController {
 
     init(config: FeedbackConfig) {
         self.config = config
+        ActuatorHapticEngine.shared?.target = config.hapticDevice
     }
 
     func handle(point: CGPoint, resolved: ResolvedElement?) {
@@ -625,7 +631,7 @@ final class FeedbackController {
         // With the actuator available, the buzz runs on its own thread - the
         // only way to hold pulse rates high enough (up to 250/sec) to feel
         // like one continuous vibration instead of a series of taps.
-        if config.useEnhancedHaptics, let actuator = ActuatorHapticEngine.shared {
+        if let actuator = hapticEngine as? ActuatorHapticEngine {
             let gaps = config.vibrationMode.gaps(base: max(config.vibrateInterval, 0.004))
             actuator.startBuzz(config.vibratePattern, gaps: gaps)
             buzzing = true

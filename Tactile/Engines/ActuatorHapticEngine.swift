@@ -10,6 +10,10 @@ import AppKit
 /// use). Unlike the public API, actuation IDs map to physically distinct
 /// strengths, so Light/Standard/Firm become real intensity levels.
 ///
+/// Every haptic trackpad gets its own actuator, built-in and Magic Trackpad
+/// alike, and `target` picks which of them feel each tick. The public API
+/// offers no such routing, so device choice always goes through here.
+///
 /// Everything is resolved at runtime with dlopen/dlsym and probed once; if
 /// the framework, symbols, or actuator are missing - or break in a macOS
 /// update - `shared` is nil and callers fall back to the public engine.
@@ -36,9 +40,29 @@ final class ActuatorHapticEngine: FeedbackEngine {
     /// without one Tactile has nothing to tap.
     static var hasHapticTrackpad: Bool { shared != nil }
 
-    private let actuator: UnsafeMutableRawPointer
-    private let actuate: ActuateFunc
+    /// One opened actuator per haptic trackpad. Actuators are never closed
+    /// while the app runs - the buzz thread may still hold one - so a
+    /// device that disconnects is only marked absent.
+    private struct Device {
+        let id: UInt64
+        let isBuiltIn: Bool
+        let actuator: UnsafeMutableRawPointer
+        var present: Bool
+    }
+
+    private var devices: [Device] = []
+
+    /// Which trackpads feel the ticks. A choice whose device isn't
+    /// connected degrades to every present device, never to silence.
+    var target: HapticDeviceTarget = .all
+
+    private let create: CreateFunc
+    private let openActuator: OpenCloseFunc
     private let closeActuator: OpenCloseFunc
+    private let actuate: ActuateFunc
+    private let listDevices: DeviceListFunc?
+    private let getDeviceID: DeviceIDFunc?
+    private let deviceIsBuiltIn: DeviceBoolFunc?
 
     private init?() {
         let path = "/System/Library/PrivateFrameworks/MultitouchSupport.framework/MultitouchSupport"
@@ -50,54 +74,92 @@ final class ActuatorHapticEngine: FeedbackEngine {
               let actuateSym = dlsym(handle, "MTActuatorActuate")
         else { return nil }
 
-        let create = unsafeBitCast(createSym, to: CreateFunc.self)
-        let open = unsafeBitCast(openSym, to: OpenCloseFunc.self)
-        self.closeActuator = unsafeBitCast(closeSym, to: OpenCloseFunc.self)
-        self.actuate = unsafeBitCast(actuateSym, to: ActuateFunc.self)
+        create = unsafeBitCast(createSym, to: CreateFunc.self)
+        openActuator = unsafeBitCast(openSym, to: OpenCloseFunc.self)
+        closeActuator = unsafeBitCast(closeSym, to: OpenCloseFunc.self)
+        actuate = unsafeBitCast(actuateSym, to: ActuateFunc.self)
+        listDevices = dlsym(handle, "MTDeviceCreateList").map { unsafeBitCast($0, to: DeviceListFunc.self) }
+        getDeviceID = dlsym(handle, "MTDeviceGetDeviceID").map { unsafeBitCast($0, to: DeviceIDFunc.self) }
+        deviceIsBuiltIn = dlsym(handle, "MTDeviceIsBuiltIn").map { unsafeBitCast($0, to: DeviceBoolFunc.self) }
 
-        for deviceID in Self.candidateDeviceIDs(handle: handle) {
-            guard let actuator = create(deviceID) else { continue }
-            if open(actuator) == 0 {
-                self.actuator = actuator
-                return
+        refreshDevices()
+        if devices.isEmpty, let actuator = create(Self.legacyDeviceID) {
+            if openActuator(actuator) == 0 {
+                devices.append(Device(id: Self.legacyDeviceID, isBuiltIn: true, actuator: actuator, present: true))
+            } else {
+                Unmanaged<AnyObject>.fromOpaque(actuator).release()
             }
-            Unmanaged<AnyObject>.fromOpaque(actuator).release()
         }
-        return nil
+        if devices.isEmpty { return nil }
     }
 
-    /// Device IDs worth trying, built-in trackpads first, legacy ID last.
-    private static func candidateDeviceIDs(handle: UnsafeMutableRawPointer) -> [UInt64] {
-        var builtIn: [UInt64] = []
-        var external: [UInt64] = []
+    // MARK: - Devices
 
-        if let listSym = dlsym(handle, "MTDeviceCreateList"),
-           let idSym = dlsym(handle, "MTDeviceGetDeviceID") {
-            let list = unsafeBitCast(listSym, to: DeviceListFunc.self)
-            let getID = unsafeBitCast(idSym, to: DeviceIDFunc.self)
-            let isBuiltIn = dlsym(handle, "MTDeviceIsBuiltIn").map {
-                unsafeBitCast($0, to: DeviceBoolFunc.self)
-            }
+    /// Re-scans connected trackpads: newly connected ones get an actuator
+    /// opened, missing ones are marked absent. Existing actuators are left
+    /// open so an in-flight buzz can never touch a freed handle; actuating
+    /// an absent device is a harmless error return.
+    func refreshDevices() {
+        guard let listDevices, let getDeviceID,
+              let scanned = listDevices()?.takeRetainedValue() as? [AnyObject]
+        else { return }
 
-            if let devices = list()?.takeRetainedValue() as? [AnyObject] {
-                for device in devices {
-                    let pointer = Unmanaged.passUnretained(device).toOpaque()
-                    var deviceID: UInt64 = 0
-                    guard getID(pointer, &deviceID) == 0, deviceID != 0 else { continue }
-                    if isBuiltIn?(pointer) ?? false {
-                        builtIn.append(deviceID)
-                    } else {
-                        external.append(deviceID)
-                    }
-                }
-            }
+        var found: [(id: UInt64, isBuiltIn: Bool)] = []
+        for device in scanned {
+            let pointer = Unmanaged.passUnretained(device).toOpaque()
+            var deviceID: UInt64 = 0
+            guard getDeviceID(pointer, &deviceID) == 0, deviceID != 0 else { continue }
+            found.append((deviceID, deviceIsBuiltIn?(pointer) ?? false))
+        }
+        // An empty scan is a framework hiccup, not zero trackpads.
+        guard !found.isEmpty else { return }
+
+        let foundIDs = Set(found.map(\.id))
+        for index in devices.indices {
+            devices[index].present = foundIDs.contains(devices[index].id)
         }
 
-        return builtIn + external + [legacyDeviceID]
+        // Only devices whose actuator opens count: mice and other
+        // multitouch hardware without a haptic motor fail here.
+        let known = Set(devices.map(\.id))
+        for candidate in found where !known.contains(candidate.id) {
+            guard let actuator = create(candidate.id) else { continue }
+            if openActuator(actuator) == 0 {
+                devices.append(Device(id: candidate.id, isBuiltIn: candidate.isBuiltIn, actuator: actuator, present: true))
+            } else {
+                Unmanaged<AnyObject>.fromOpaque(actuator).release()
+            }
+        }
+    }
+
+    /// True when more than one haptic trackpad is connected right now,
+    /// the only time a destination choice means anything.
+    var hasMultipleDevices: Bool { presentDevices.count > 1 }
+
+    var hasBuiltInDevice: Bool { presentDevices.contains(where: \.isBuiltIn) }
+
+    var hasExternalDevice: Bool { presentDevices.contains { !$0.isBuiltIn } }
+
+    private var presentDevices: [Device] { devices.filter(\.present) }
+
+    /// The actuators the current target maps to, with two safety nets: an
+    /// all-absent device list falls back to every opened actuator, and a
+    /// target with no matching device falls back to the whole pool.
+    private var targetActuators: [UnsafeMutableRawPointer] {
+        let pool = presentDevices.isEmpty ? devices : presentDevices
+        let matched: [Device]
+        switch target {
+        case .all: matched = pool
+        case .builtIn: matched = pool.filter(\.isBuiltIn)
+        case .external: matched = pool.filter { !$0.isBuiltIn }
+        }
+        return (matched.isEmpty ? pool : matched).map(\.actuator)
     }
 
     func tick(_ pattern: FeedbackPattern) {
-        _ = actuate(actuator, pattern.actuationID, 0, 0, 0)
+        for actuator in targetActuators {
+            _ = actuate(actuator, pattern.actuationID, 0, 0, 0)
+        }
     }
 
     // MARK: - Continuous buzz
@@ -110,7 +172,7 @@ final class ActuatorHapticEngine: FeedbackEngine {
     /// uses for its haptics, just scheduled back-to-back.
     func startBuzz(_ pattern: FeedbackPattern, gaps: [TimeInterval]) {
         let microseconds = gaps.map { UInt32(max($0, 0.004) * 1_000_000) }
-        buzzer.start(actuator: actuator, actuate: actuate, id: pattern.actuationID, gaps: microseconds)
+        buzzer.start(actuators: targetActuators, actuate: actuate, id: pattern.actuationID, gaps: microseconds)
     }
 
     func stopBuzz() {
@@ -126,17 +188,19 @@ final class ActuatorHapticEngine: FeedbackEngine {
         private let lock = NSLock()
         private var generation = 0
 
-        func start(actuator: UnsafeMutableRawPointer, actuate: @escaping ActuateFunc, id: Int32, gaps: [UInt32]) {
+        func start(actuators: [UnsafeMutableRawPointer], actuate: @escaping ActuateFunc, id: Int32, gaps: [UInt32]) {
             lock.lock()
             generation += 1
             let mine = generation
             lock.unlock()
-            guard !gaps.isEmpty else { return }
+            guard !gaps.isEmpty, !actuators.isEmpty else { return }
 
             let thread = Thread { [weak self] in
                 var step = 0
                 while let self, self.isCurrent(mine) {
-                    _ = actuate(actuator, id, 0, 0, 0)
+                    for actuator in actuators {
+                        _ = actuate(actuator, id, 0, 0, 0)
+                    }
                     usleep(gaps[step % gaps.count])
                     step += 1
                 }
@@ -162,8 +226,10 @@ final class ActuatorHapticEngine: FeedbackEngine {
 
     deinit {
         buzzer.stop()
-        _ = closeActuator(actuator)
-        Unmanaged<AnyObject>.fromOpaque(actuator).release()
+        for device in devices {
+            _ = closeActuator(device.actuator)
+            Unmanaged<AnyObject>.fromOpaque(device.actuator).release()
+        }
     }
 }
 
