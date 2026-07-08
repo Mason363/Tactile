@@ -99,7 +99,7 @@ struct AppExclusionView: View {
 }
 
 /// Chrome browser-integration controls: the toggle, the native-messaging host
-/// install status, and the steps to load the companion extension.
+/// install status, and the Chrome Web Store link for the companion extension.
 private struct BrowserIntegrationSection: View {
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var controller: AppController
@@ -128,10 +128,13 @@ private struct BrowserIntegrationSection: View {
                     statusTick += 1
                 }
 
-                Text("Then load the extension in Chrome: open chrome://extensions, enable Developer mode, choose “Load unpacked”, and select Tactile's extension folder. Expected extension ID: \(BridgeConstants.extensionID).")
+                Text("Then install the companion extension from the Chrome Web Store. It lets Tactile read buttons it would otherwise miss in the browser.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+
+                Link("Get the Chrome extension",
+                     destination: URL(string: "https://chromewebstore.google.com/detail/bkpkcddffbjipobgjlagggbbldefpldo?utm_source=item-share-cb")!)
+                    .font(.caption)
             }
         }
     }

@@ -48,9 +48,9 @@ per-element, so continuous use stays under a few percent of one core.
 - **Works everywhere**: native apps, Finder (files, folders, sidebar, and
   desktop icons), browsers, and Electron apps; anything that exposes an
   accessibility tree.
-- **Chrome browser bridge (optional)**: a companion extension reads the real
-  page DOM, so `<div>`-style buttons that never reach the accessibility tree
-  still tick. See [`extension/`](extension/).
+- **Chrome browser bridge (optional)**: a [companion extension](https://chromewebstore.google.com/detail/bkpkcddffbjipobgjlagggbbldefpldo?utm_source=item-share-cb)
+  reads the real page DOM, so `<div>`-style buttons that never reach the
+  accessibility tree still tick. Source in [`extension/`](extension/).
 - **Haptic waveforms**: every feel is a composable waveform: pick a preset
   (taps, double/triple tap, ramps, shake, heartbeat) or compose your own pulse
   by pulse, per element type.
@@ -145,9 +145,11 @@ To enable these, go to Tactile Settings -> visual aids
 
 ### Chrome extension (optional)
 
-For web pages, load the companion extension for richer coverage; see
-[`extension/README.md`](extension/README.md). Then enable **Browser
-integration** in Settings → Apps & Browser.
+For web pages, install the companion extension for richer coverage: it picks up
+custom buttons the app would otherwise miss in the browser. Get it from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/bkpkcddffbjipobgjlagggbbldefpldo?utm_source=item-share-cb)
+(or build from source; see [`extension/README.md`](extension/README.md)). Then
+enable **Browser integration** in Settings → Apps & Browser.
 
 ## Building
 
