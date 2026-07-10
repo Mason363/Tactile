@@ -152,6 +152,10 @@ final class ActuatorHapticEngine: FeedbackEngine {
         case .all: matched = pool
         case .builtIn: matched = pool.filter(\.isBuiltIn)
         case .external: matched = pool.filter { !$0.isBuiltIn }
+        // The phone is not an actuator; reaching this engine anyway means
+        // the pipeline already degraded (phone gone, enhanced haptics on),
+        // so behave like "all".
+        case .iphone: matched = pool
         }
         return (matched.isEmpty ? pool : matched).map(\.actuator)
     }

@@ -175,6 +175,9 @@ final class AppController: ObservableObject {
 
     private func pushConfig() {
         feedback.config = settings.makeConfig()
+        // Tell Coast whether Tactile owns the phone's hover feedback, so
+        // Coast's own hover ticks stand down while we target the phone.
+        PhoneHapticEngine.shared.setClaim(settings.hapticDevice == .iphone)
         cursorMonitor.sampleInterval = 1.0 / max(settings.pollingHz, 1)
         cursorMonitor.unthrottled = settings.noLagMode
         cursorMonitor.screenEdgesEnabled = settings.screenEdgesEnabled
@@ -231,6 +234,10 @@ final class AppController: ObservableObject {
 
     private func startPipeline() {
         cursorMonitor.start()
+        // Coast link: lets a connected iPhone appear in the device chooser
+        // and carry the ticks. Local socket client, does nothing when Coast
+        // isn't around.
+        PhoneHapticEngine.shared.start()
     }
 
     private func stopPipeline() {
@@ -238,6 +245,7 @@ final class AppController: ObservableObject {
         keyboardMonitor.stop()
         feedback.reset()
         bridge.stop()
+        PhoneHapticEngine.shared.stop()
         indicator.hideAll()
     }
 

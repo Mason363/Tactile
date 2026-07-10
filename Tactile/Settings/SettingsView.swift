@@ -234,8 +234,11 @@ struct GeneralSettingsView: View {
 
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginItemError: String?
-    /// Device choices to offer, empty unless several trackpads are connected.
+    /// Device choices to offer, empty unless several trackpads are
+    /// connected or a Coast iPhone is reachable.
     @State private var deviceTargets: [HapticDeviceTarget] = []
+    /// Coast bridge: publishes the reachable phone's name.
+    @ObservedObject private var phone = PhoneHapticEngine.shared
 
     var body: some View {
         Form {
@@ -259,19 +262,25 @@ struct GeneralSettingsView: View {
             }
 
             if deviceTargets.count > 1 {
-                Section("Trackpads") {
+                Section("Devices") {
                     Picker("Feel haptics on", selection: $settings.hapticDevice) {
                         ForEach(deviceTargets) { target in
-                            Text(target.displayName).tag(target)
+                            Text(label(for: target)).tag(target)
                         }
                     }
                     .onChange(of: settings.hapticDevice) { _, newValue in
                         // Tap the new destination so the choice is felt there.
+                        if newValue == .iphone {
+                            phone.tick(.generic)
+                            return
+                        }
                         guard let engine = ActuatorHapticEngine.shared else { return }
                         engine.target = newValue
                         engine.tick(.generic)
                     }
-                    Text("Several haptic trackpads are connected. Choose which one ticks; if it disconnects, feedback returns to all of them.")
+                    Text(phone.isAvailable
+                         ? "An iPhone running Coast can feel the ticks in your hand instead of under your finger. If the chosen device disconnects, feedback returns to the trackpads."
+                         : "Several haptic trackpads are connected. Choose which one ticks; if it disconnects, feedback returns to all of them.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -296,25 +305,40 @@ struct GeneralSettingsView: View {
         .formStyle(.grouped)
         .scrollDisabled(true)
         .onAppear(perform: refreshDeviceTargets)
+        .onChange(of: phone.phoneName) { _, _ in refreshDeviceTargets() }
     }
 
-    /// Re-scans the connected trackpads; the picker exists only while more
-    /// than one is present, offering just the kinds actually connected.
+    /// The iPhone entry carries the phone's real name; everything else is
+    /// its fixed label.
+    private func label(for target: HapticDeviceTarget) -> String {
+        if target == .iphone, let name = phone.phoneName {
+            return "\(name) (Coast)"
+        }
+        return target.displayName
+    }
+
+    /// Re-scans the connected devices; the picker exists only while there
+    /// is a real choice: several trackpads, or a Coast iPhone next to them.
     private func refreshDeviceTargets() {
-        guard let engine = ActuatorHapticEngine.shared else {
-            deviceTargets = []
-            return
+        var targets: [HapticDeviceTarget] = []
+        if let engine = ActuatorHapticEngine.shared {
+            engine.refreshDevices()
+            if engine.hasMultipleDevices {
+                targets = [.all]
+                if engine.hasBuiltInDevice { targets.append(.builtIn) }
+                if engine.hasExternalDevice { targets.append(.external) }
+            }
         }
-        engine.refreshDevices()
-        guard engine.hasMultipleDevices else {
-            deviceTargets = []
-            return
+        if phone.isAvailable {
+            // The phone stands beside the trackpads: "All trackpads" keeps
+            // meaning exactly that, the phone is an explicit pick.
+            if targets.isEmpty { targets = [.all] }
+            targets.append(.iphone)
         }
-        var targets: [HapticDeviceTarget] = [.all]
-        if engine.hasBuiltInDevice { targets.append(.builtIn) }
-        if engine.hasExternalDevice { targets.append(.external) }
         deviceTargets = targets
-        if !targets.contains(settings.hapticDevice) { settings.hapticDevice = .all }
+        if !targets.isEmpty, !targets.contains(settings.hapticDevice) {
+            settings.hapticDevice = .all
+        }
     }
 }
 
@@ -541,6 +565,12 @@ private struct HoldToFeelButton: View {
 
     private func start() {
         buzzing = true
+        // The phone target buzzes over the timer path, like the pipeline:
+        // the actuator's dedicated thread only reaches trackpads.
+        if settings.hapticDevice == .iphone, PhoneHapticEngine.shared.isAvailable {
+            scheduleTick()
+            return
+        }
         if settings.useEnhancedHaptics, let actuator = ActuatorHapticEngine.shared {
             let base = max(settings.vibrateRateMs / 1000, 0.004)
             let mode = settings.vibrationMode
@@ -557,9 +587,13 @@ private struct HoldToFeelButton: View {
         let next = Timer(timeInterval: gap, repeats: false) { _ in
             Task { @MainActor in
                 guard buzzing else { return }
-                // A specific device choice routes through the actuator even
-                // without enhanced haptics, matching the live pipeline.
-                if settings.hapticDevice != .all, let actuator = ActuatorHapticEngine.shared {
+                // Route each pulse where the live pipeline would: the Coast
+                // phone when targeted and reachable, a specific trackpad
+                // through the actuator, else the system engine.
+                if settings.hapticDevice == .iphone, PhoneHapticEngine.shared.isAvailable {
+                    PhoneHapticEngine.shared.tick(settings.vibratePattern)
+                } else if settings.hapticDevice.isTrackpadSpecific,
+                          let actuator = ActuatorHapticEngine.shared {
                     actuator.tick(settings.vibratePattern)
                 } else {
                     SystemHapticEngine().tick(settings.vibratePattern)

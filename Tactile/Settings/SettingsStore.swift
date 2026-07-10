@@ -126,14 +126,18 @@ enum VibrationMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// Which connected trackpad feels the haptics. Only meaningful when more
-/// than one haptic trackpad is present (a MacBook with a Magic Trackpad
-/// paired); routing to one device goes through the actuator engine, since
-/// the public haptics API reaches every device at once.
+/// Which connected device feels the haptics. Offered when more than one
+/// haptic trackpad is present (a MacBook with a Magic Trackpad paired) or
+/// an iPhone running Coast is reachable. Routing to one trackpad goes
+/// through the actuator engine, since the public haptics API reaches every
+/// trackpad at once; the iPhone routes through Coast's local bridge.
 enum HapticDeviceTarget: String, CaseIterable, Identifiable {
     case all
     case builtIn
     case external
+    /// An iPhone connected to this Mac through Coast. Offered only while
+    /// one is reachable; degrades back to the trackpads when it isn't.
+    case iphone
 
     var id: String { rawValue }
 
@@ -142,8 +146,12 @@ enum HapticDeviceTarget: String, CaseIterable, Identifiable {
         case .all: return "All trackpads"
         case .builtIn: return "Built-in trackpad"
         case .external: return "Magic Trackpad"
+        case .iphone: return "iPhone (Coast)"
         }
     }
+
+    /// A single-trackpad choice: the routing that needs the actuator.
+    var isTrackpadSpecific: Bool { self == .builtIn || self == .external }
 }
 
 /// An immutable snapshot of every setting the feedback pipeline needs.

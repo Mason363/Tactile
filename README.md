@@ -72,6 +72,11 @@ per-element, so continuous use stays under a few percent of one core.
 - **Continuous vibration**: with enhanced haptics on, keep the trackpad
   buzzing while the cursor rests on a control, fast enough (up to 250 pulses/s)
   to feel like a true vibration rather than a series of taps.
+- **iPhone as the haptic device (via [Coast](https://github.com/Mason363/Coast))**:
+  when Coast connects an iPhone to your Mac, the phone shows up in the device
+  chooser and every tick plays in your hand through its Taptic Engine: ideal
+  when the phone itself is your mouse. The two apps talk over a local socket
+  only, and feedback returns to the trackpads whenever the phone drops away.
 - **Custom sounds**: an optional click for external-mouse users; use a
   built-in sound or import your own.
 - **Profiles & import/export**: save named snapshots of your whole setup,
@@ -193,6 +198,9 @@ check.
   content, and never keystrokes.
 - **Local IPC only.** The optional browser bridge talks to the extension over a
   local Unix socket in your Application Support folder, never over the network.
+  The optional Coast link (iPhone haptics) has the same shape: a local socket
+  to the Coast app on this Mac; any networking to the phone is Coast's, not
+  Tactile's.
 - **Auditable.** The one private API (the trackpad actuator, via
   MultitouchSupport) is loaded at runtime with `dlopen` and falls back safely;
   everything else is public API. The whole source is here.

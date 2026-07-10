@@ -13,9 +13,14 @@ enum HapticPreview {
 
     static func play(_ waveform: HapticWaveform, enhanced: Bool) {
         let engine: FeedbackEngine
-        // A specific device choice routes through the actuator even without
-        // enhanced haptics, so previews land on the chosen trackpad.
-        if let actuator = ActuatorHapticEngine.shared, enhanced || actuator.target != .all {
+        // Previews land where the pipeline would: the Coast phone when it
+        // is the reachable target, else the chosen trackpad through the
+        // actuator (a specific choice routes there even without enhanced
+        // haptics), else the system engine.
+        if PhoneHapticEngine.shared.isCurrentTarget {
+            engine = PhoneHapticEngine.shared
+        } else if let actuator = ActuatorHapticEngine.shared,
+                  enhanced || actuator.target.isTrackpadSpecific {
             engine = actuator
         } else {
             engine = SystemHapticEngine()

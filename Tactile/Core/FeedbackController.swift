@@ -75,11 +75,17 @@ final class FeedbackController {
     private var buzzing = false
 
     /// Enhanced haptics when enabled and supported, public engine otherwise.
-    /// A specific device choice also routes through the actuator: the public
-    /// API always reaches every connected trackpad at once.
+    /// A specific trackpad choice also routes through the actuator: the
+    /// public API always reaches every connected trackpad at once. The
+    /// iPhone choice routes through Coast's bridge while the phone is
+    /// reachable, and degrades to the trackpad engines (never to silence)
+    /// while it isn't.
     private var hapticEngine: FeedbackEngine {
+        if config.hapticDevice == .iphone, PhoneHapticEngine.shared.isAvailable {
+            return PhoneHapticEngine.shared
+        }
         if let actuator = ActuatorHapticEngine.shared,
-           config.useEnhancedHaptics || config.hapticDevice != .all {
+           config.useEnhancedHaptics || config.hapticDevice.isTrackpadSpecific {
             return actuator
         }
         return haptics
