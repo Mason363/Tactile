@@ -22,6 +22,18 @@
         5. Set SUPublicEDKey in Info.plist to the matching public key.
     -->
     <item>
+      <title>Tactile 1.0.4</title>
+      <pubDate>Mon, 13 Jul 2026 00:00:00 +0000</pubDate>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <description><![CDATA[<p>Tactile is now notarized by Apple: it opens without the Gatekeeper warning, no need to clear quarantine. Updates are also signed with Sparkle's EdDSA key from this release on.</p>]]></description>
+      <enclosure url="https://github.com/Mason363/Tactile/releases/download/v1.0.4/Tactile-1.0.4.zip"
+                 sparkle:version="5"
+                 sparkle:shortVersionString="1.0.4"
+                 length="3084069"
+                 sparkle:edSignature="FYR7rJRHYLjRNgsKkFcrG7p9s0DDzYegNwuK1rfOP0Dptn06Q494PAGFShPbNHscOmZ6nafBPJngPMnTDyx8Bg=="
+                 type="application/octet-stream" />
+    </item>
+    <item>
       <title>Tactile 1.0</title>
       <pubDate>Wed, 02 Jul 2026 00:00:00 +0000</pubDate>
       <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>

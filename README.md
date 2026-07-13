@@ -134,19 +134,11 @@ To enable these, go to Tactile Settings -> visual aids
 ## Install
 
 1. Download `Tactile.app` from the [latest release](https://github.com/Mason363/Tactile/releases/latest) and drag it to `/Applications`.
-2. **Tactile is not yet notarized by Apple**, so Gatekeeper will refuse to open
-   it on first launch (“Tactile can’t be opened because Apple cannot check it
-   for malicious software”). Clear the quarantine flag once, in Terminal:
-
-   ```sh
-   xattr -dr com.apple.quarantine /Applications/Tactile.app
-   ```
-
-   Then open it normally. (You only need to do this once. It's the standard
-   step for open-source Mac apps distributed without a paid notarization
-   subscription, the full source is here for you to inspect or build yourself.)
-3. Launch Tactile, grant the Accessibility permission when prompted, and you're
+2. Launch Tactile, grant the Accessibility permission when prompted, and you're
    set. The icon lives in the menu bar.
+
+Tactile is notarized by Apple, so it opens normally with no Gatekeeper
+workaround. The whole source is here for you to inspect or build yourself.
 
 ### Chrome extension (optional)
 

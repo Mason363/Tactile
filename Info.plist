@@ -9,9 +9,7 @@
 	<string>https://raw.githubusercontent.com/Mason363/Tactile/main/appcast.xml</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
-	<!-- SUPublicEDKey: paste the public key from Sparkle's generate_keys before
-	     publishing a signed update (see README → Releasing). Absent for now so
-	     unsigned dev builds still run; update installation stays disabled until
-	     it's set. -->
+	<key>SUPublicEDKey</key>
+	<string>v7hdSqV92lab8k/rrg9bWJr7L1vdqLNZ28b3b3hn+5g=</string>
 </dict>
 </plist>
