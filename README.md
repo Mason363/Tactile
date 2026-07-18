@@ -168,6 +168,13 @@ Automatic updates use Sparkle and are driven by
    stores a private key in your login Keychain and prints a public key.
 2. Paste that public key into `Info.plist` → `SUPublicEDKey`, and commit.
 
+Ship the public key in a release that keeps the previous Apple code-signing
+identity. Existing installations do not trust a newly added Sparkle key until
+they have installed it once. If the Apple code-signing identity must change at
+the same time, first publish a bridge update signed with the old identity and
+containing the new public key. Add `sparkle:minimumAutoupdateVersion` to the
+later update so older builds install the bridge first.
+
 **Each release**
 
 1. Bump `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in the project.
