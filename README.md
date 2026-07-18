@@ -72,7 +72,7 @@ per-element, so continuous use stays under a few percent of one core.
 - **Continuous vibration**: with enhanced haptics on, keep the trackpad
   buzzing while the cursor rests on a control, fast enough (up to 250 pulses/s)
   to feel like a true vibration rather than a series of taps.
-- **iPhone as the haptic device (via [Coast](https://github.com/Mason363/Coast))**:
+- **iPhone as the haptic device (via [Coast](https://coast.masn.studio))**:
   when Coast connects an iPhone to your Mac, the phone shows up in the device
   chooser and every tick plays in your hand through its Taptic Engine: ideal
   when the phone itself is your mouse. The two apps talk over a local socket
