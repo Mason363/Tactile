@@ -19,8 +19,8 @@ struct ProfilesView: View {
         Form {
             Section {
                 HStack {
-                    TextField("settings.profiles.new-profile-name", text: $newProfileName)
-                    Button("settings.profiles.save-current") {
+                    TextField(localization.localizer.string("settings.profiles.new-profile-name"), text: $newProfileName)
+                    Button(localization.localizer.string("settings.profiles.save-current")) {
                         let name = newProfileName.trimmingCharacters(in: .whitespaces)
                         guard !name.isEmpty else { return }
                         settings.profiles.removeAll { $0.name == name }
@@ -33,7 +33,7 @@ struct ProfilesView: View {
                 }
 
                 if settings.profiles.isEmpty {
-                    Text("settings.profiles.no-profiles")
+                    Text(verbatim: localization.localizer.string("settings.profiles.no-profiles"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach($settings.profiles) { $profile in
@@ -45,18 +45,18 @@ struct ProfilesView: View {
                                         ? "settings.profiles.active-profile"
                                         : "settings.profiles.inactive-profile"
                                 )))
-                            TextField("settings.profiles.profile-name", text: $profile.name)
+                            TextField(localization.localizer.string("settings.profiles.profile-name"), text: $profile.name)
                                 .textFieldStyle(.plain)
                             Spacer()
-                            Button("settings.profiles.apply") {
+                            Button(localization.localizer.string("settings.profiles.apply")) {
                                 settings.applyProfile(profile)
                             }
                             Menu {
-                                Button("settings.profiles.update-with-current") {
+                                Button(localization.localizer.string("settings.profiles.update-with-current")) {
                                     profile.snapshot = settings.makeSnapshot()
                                     settings.activeProfileID = profile.id
                                 }
-                                Button("settings.profiles.duplicate") {
+                                Button(localization.localizer.string("settings.profiles.duplicate")) {
                                     var copy = profile
                                     copy.id = UUID()
                                     copy.name = localization.localizer.format(
@@ -66,7 +66,7 @@ struct ProfilesView: View {
                                     settings.profiles.append(copy)
                                 }
                                 Divider()
-                                Button("settings.profiles.delete", role: .destructive) {
+                                Button(localization.localizer.string("settings.profiles.delete"), role: .destructive) {
                                     settings.appProfiles = settings.appProfiles.filter { $0.value != profile.id }
                                     settings.profiles.removeAll { $0.id == profile.id }
                                     if settings.activeProfileID == profile.id { settings.activeProfileID = nil }
@@ -84,16 +84,16 @@ struct ProfilesView: View {
                     }
                 }
             } header: {
-                Text("settings.profiles.saved-profiles")
+                Text(verbatim: localization.localizer.string("settings.profiles.saved-profiles"))
             } footer: {
-                Text("settings.profiles.saved-profiles-help")
+                Text(verbatim: localization.localizer.string("settings.profiles.saved-profiles-help"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
                 if settings.appProfiles.isEmpty {
-                    Text("settings.profiles.no-app-assignments")
+                    Text(verbatim: localization.localizer.string("settings.profiles.no-app-assignments"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(sortedAssignments, id: \.self) { bundleID in
@@ -101,8 +101,8 @@ struct ProfilesView: View {
                     }
                 }
 
-                Menu("settings.profiles.assign-app") {
-                    Button("settings.profiles.choose-applications") { chooseFromApplications() }
+                Menu(localization.localizer.string("settings.profiles.assign-app")) {
+                    Button(localization.localizer.string("settings.profiles.choose-applications")) { chooseFromApplications() }
                     if !runningApps.isEmpty {
                         Divider()
                         ForEach(runningApps, id: \.bundleID) { app in
@@ -117,7 +117,7 @@ struct ProfilesView: View {
                 .fixedSize()
                 .disabled(settings.profiles.isEmpty)
             } header: {
-                Text("settings.profiles.per-app-profiles")
+                Text(verbatim: localization.localizer.string("settings.profiles.per-app-profiles"))
             } footer: {
                 Text(verbatim: localization.localizer.string(
                     settings.profiles.isEmpty
@@ -128,12 +128,12 @@ struct ProfilesView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("settings.profiles.import-export") {
+            Section(localization.localizer.string("settings.profiles.import-export")) {
                 HStack {
-                    Button("settings.profiles.export-settings") { exportSettings() }
-                    Button("settings.profiles.import-settings") { importSettings() }
+                    Button(localization.localizer.string("settings.profiles.export-settings")) { exportSettings() }
+                    Button(localization.localizer.string("settings.profiles.import-settings")) { importSettings() }
                 }
-                Text("settings.profiles.import-export-help")
+                Text(verbatim: localization.localizer.string("settings.profiles.import-export-help"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let ioMessage {

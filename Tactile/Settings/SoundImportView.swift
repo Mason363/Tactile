@@ -190,14 +190,14 @@ struct SoundImportView: View {
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("settings.sound-import.reset-crop") {
+                    Button(localization.localizer.string("settings.sound-import.reset-crop")) {
                         start = 0
                         end = 1
                     }
                     .disabled(start == 0 && end == 1)
                 }
 
-                Text("settings.sound-import.crop-help")
+                Text(verbatim: localization.localizer.string("settings.sound-import.crop-help"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if let loadError {
@@ -217,18 +217,18 @@ struct SoundImportView: View {
                 Button {
                     preview.play(url: url, startFraction: start, endFraction: end, volume: settings.audioVolume)
                 } label: {
-                    Label("settings.sound-import.play", systemImage: "play.fill")
+                    Label(localization.localizer.string("settings.sound-import.play"), systemImage: "play.fill")
                 }
                 .disabled(info == nil)
 
                 Spacer()
 
-                Button("settings.sound-import.cancel") {
+                Button(localization.localizer.string("settings.sound-import.cancel")) {
                     preview.stop()
                     dismiss()
                 }
 
-                Button("settings.sound-import.save-sound") {
+                Button(localization.localizer.string("settings.sound-import.save-sound")) {
                     preview.stop()
                     do {
                         let identifier = try SoundImportSupport.saveTrimmed(from: url, startFraction: start, endFraction: end)
@@ -307,6 +307,7 @@ private enum SoundImportFailure {
 /// The waveform with draggable crop handles. Peaks are drawn as mirrored
 /// vertical bars; the area outside the selection is dimmed.
 private struct WaveformCropView: View {
+    @EnvironmentObject private var localization: LocalizationController
     let bins: [Float]
     @Binding var start: Double
     @Binding var end: Double
@@ -350,7 +351,7 @@ private struct WaveformCropView: View {
                                 start = min(max(0, value.location.x / width), end - minimumSpan)
                             }
                     )
-                    .accessibilityLabel("a11y.sound-import-crop-start")
+                    .accessibilityLabel(localization.localizer.string("a11y.sound-import-crop-start"))
                 handle(at: width * end, height: height)
                     .gesture(
                         DragGesture(minimumDistance: 0)
@@ -358,7 +359,7 @@ private struct WaveformCropView: View {
                                 end = max(min(1, value.location.x / width), start + minimumSpan)
                             }
                     )
-                    .accessibilityLabel("a11y.sound-import-crop-end")
+                    .accessibilityLabel(localization.localizer.string("a11y.sound-import-crop-end"))
             }
         }
     }

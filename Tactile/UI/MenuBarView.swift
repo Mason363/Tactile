@@ -14,19 +14,19 @@ struct MenuBarView: View {
 
     var body: some View {
         if !ActuatorHapticEngine.hasHapticTrackpad {
-            Label("menu.no-haptic-trackpad", systemImage: "exclamationmark.triangle.fill")
-            Text("menu.trackpad-requirement")
+            Label(localization.localizer.string("menu.no-haptic-trackpad"), systemImage: "exclamationmark.triangle.fill")
+            Text(verbatim: localization.localizer.string("menu.trackpad-requirement"))
             Divider()
         }
 
         if !permission.isTrusted {
-            Button("menu.grant-accessibility") {
+            Button(localization.localizer.string("menu.grant-accessibility")) {
                 OnboardingWindow.show(controller: controller)
             }
             Divider()
         }
 
-        Toggle("menu.haptic-feedback", isOn: $settings.isEnabled)
+        Toggle(localization.localizer.string("menu.haptic-feedback"), isOn: $settings.isEnabled)
             .disabled(!permission.isTrusted)
 
         if let until = controller.pausedUntil {
@@ -39,7 +39,7 @@ struct MenuBarView: View {
                 ))
             }
         } else {
-            Button("menu.pause-15-minutes") {
+            Button(localization.localizer.string("menu.pause-15-minutes")) {
                 controller.pause(for: 15 * 60)
             }
             .disabled(!settings.isEnabled || !permission.isTrusted)
@@ -48,7 +48,7 @@ struct MenuBarView: View {
         Divider()
 
         if !settings.profiles.isEmpty {
-            Menu("menu.profiles") {
+            Menu(localization.localizer.string("menu.profiles")) {
                 ForEach(settings.profiles) { profile in
                     Toggle(isOn: Binding(
                         get: { settings.activeProfileID == profile.id },
@@ -60,19 +60,19 @@ struct MenuBarView: View {
             }
         }
 
-        Button("menu.settings") {
+        Button(localization.localizer.string("menu.settings")) {
             SettingsWindow.show(controller: controller)
         }
         .keyboardShortcut(",")
 
-        Button("menu.check-for-updates") {
+        Button(localization.localizer.string("menu.check-for-updates")) {
             updater.checkForUpdates()
         }
         .disabled(!updater.canCheckForUpdates)
 
         Divider()
 
-        Button("menu.quit-tactile") {
+        Button(localization.localizer.string("menu.quit-tactile")) {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q")

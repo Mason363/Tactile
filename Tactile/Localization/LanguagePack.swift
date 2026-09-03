@@ -175,9 +175,11 @@ struct Localizer {
             ? emergency
             : lookup(key, in: fallback.bundle, fallback: emergency)
         let localized = pack.isSyntheticFallback ? english : lookup(key, in: pack.bundle, fallback: english)
-        let format = placeholderSignature(in: localized) == placeholderSignature(in: english)
-            ? localized
-            : english
+        let englishSignature = placeholderSignature(in: english)
+        let format = englishSignature != nil
+            && placeholderSignature(in: localized) == englishSignature ? localized : english
+        // Never pass a malformed fallback format to Foundation's varargs API.
+        guard englishSignature != nil else { return emergency }
         return String(format: format, locale: pack.locale, arguments: arguments)
     }
 
@@ -212,15 +214,61 @@ struct Localizer {
         return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallback : value
     }
 
-    private func placeholderSignature(in format: String) -> [String] {
-        let pattern = #"%(?!%)(?:\d+\$)?[-+#0 ']*(?:\d+|\*)?(?:\.\d+|\.\*)?(?:hh|h|ll|l|q|z|t|j|L)?[@diuoxXfFeEgGaAcCsSp]"#
-        guard let expression = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let range = NSRange(format.startIndex..<format.endIndex, in: format)
-        return expression.matches(in: format, range: range).compactMap {
-            guard let swiftRange = Range($0.range, in: format) else { return nil }
-            return String(format[swiftRange])
-                .replacingOccurrences(of: #"%\d+\$"#, with: "%", options: .regularExpression)
-        }.sorted()
+    private func placeholderSignature(in format: String) -> [String]? {
+        let pattern = #"%(?:([1-9][0-9]*)\$)?[-+#0 ']*(\*(?:[1-9][0-9]*\$)?|[0-9]+)?(?:\.(\*(?:[1-9][0-9]*\$)?|[0-9]+))?(hh|h|ll|l|q|z|t|j|L)?([@diuoxXfFeEgGaAcCsSp])"#
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let source = format as NSString
+        var cursor = 0
+        var nextArgument = 1
+        var usedPositional = false
+        var usedSequential = false
+        var signature: [String] = []
+
+        func record(_ position: Int?, type: String) {
+            let index: Int
+            if let position {
+                index = position
+                usedPositional = true
+            } else {
+                index = nextArgument
+                nextArgument += 1
+                usedSequential = true
+            }
+            signature.append("\(index):\(type)")
+        }
+
+        while cursor < source.length {
+            guard source.character(at: cursor) == 37 else { cursor += 1; continue }
+            if cursor + 1 < source.length, source.character(at: cursor + 1) == 37 {
+                cursor += 2
+                continue
+            }
+            guard let match = expression.firstMatch(
+                in: format, options: .anchored,
+                range: NSRange(location: cursor, length: source.length - cursor)
+            ) else { return nil }
+            func group(_ index: Int) -> String {
+                let range = match.range(at: index)
+                return range.location == NSNotFound ? "" : source.substring(with: range)
+            }
+            // Star width and precision consume their own integer arguments.
+            for field in [group(2), group(3)] where field.hasPrefix("*") {
+                let explicit = field.dropFirst().dropLast()
+                record(Int(explicit), type: "d")
+            }
+            let conversion = group(5)
+            let type: String
+            switch conversion {
+            case "i", "d": type = group(4) + "d"
+            case "u", "o", "x", "X": type = group(4) + "u"
+            case "f", "F", "e", "E", "g", "G", "a", "A": type = group(4) + "f"
+            default: type = group(4) + conversion
+            }
+            record(Int(group(1)), type: type)
+            cursor = NSMaxRange(match.range)
+        }
+        guard !(usedPositional && usedSequential) else { return nil }
+        return signature.sorted()
     }
 
     private func pluralVariableSignature(in format: String) -> [String] {
@@ -268,10 +316,14 @@ struct Localizer {
             else { return nil }
 
             let metadataKeys: Set<String> = ["NSStringFormatSpecTypeKey", "NSStringFormatValueTypeKey"]
-            let branchSignatures = Array(Set(variable
+            let branches = variable
                 .filter { !metadataKeys.contains($0.key) }
                 .compactMap { $0.value as? String }
-                .map(placeholderSignature)))
+            let signatures = branches.compactMap(placeholderSignature)
+            guard signatures.count == branches.count,
+                  branches.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+            else { return nil }
+            let branchSignatures = Array(Set(signatures))
                 .sorted { $0.lexicographicallyPrecedes($1) }
             guard !branchSignatures.isEmpty else { return nil }
             specifications.append(.init(

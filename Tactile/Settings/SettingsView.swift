@@ -87,7 +87,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $pane) {
-                Section("settings.sidebar.feedback") {
+                Section(localization.localizer.string("settings.sidebar.feedback")) {
                     sidebarRow(.general)
                     sidebarRow(.haptics)
                     sidebarRow(.vibration)
@@ -97,12 +97,12 @@ struct SettingsView: View {
                     sidebarRow(.visual)
                     sidebarRow(.sound)
                 }
-                Section("settings.sidebar.system") {
+                Section(localization.localizer.string("settings.sidebar.system")) {
                     sidebarRow(.performance)
                     sidebarRow(.apps)
                     sidebarRow(.profiles)
                 }
-                Section("settings.sidebar.try-it") {
+                Section(localization.localizer.string("settings.sidebar.try-it")) {
                     sidebarRow(.playground)
                 }
                 Section {
@@ -200,9 +200,11 @@ enum SettingsWindow {
             newWindow.center()
             window = newWindow
             titleObservation = controller.localization.$resolvedPack
-                .sink { [weak newWindow, weak controller] _ in
+                .sink { [weak newWindow, weak controller] pack in
                     guard let controller else { return }
-                    newWindow?.title = controller.localization.localizer.string("window.settings.title")
+                    newWindow?.title = Localizer(
+                        pack: pack, fallback: controller.localization.registry.englishPack
+                    ).string("window.settings.title")
                 }
         }
         NSApp.activate(ignoringOtherApps: true)
@@ -228,9 +230,9 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
-            Section("settings.general.language.section") {
-                Picker("settings.general.language.picker", selection: $settings.languageSelection) {
-                    Text("language.system")
+            Section(localization.localizer.string("settings.general.language.section")) {
+                Picker(localization.localizer.string("settings.general.language.picker"), selection: $settings.languageSelection) {
+                    Text(verbatim: localization.localizer.string("language.system"))
                         .tag(LanguageSelection.system)
                     ForEach(localization.registry.packs) { pack in
                         Text(verbatim: pack.nativeDisplayName)
@@ -240,8 +242,8 @@ struct GeneralSettingsView: View {
             }
 
             Section {
-                Toggle("settings.general.enable-feedback", isOn: $settings.isEnabled)
-                Toggle("settings.general.launch-at-login", isOn: $launchAtLogin)
+                Toggle(localization.localizer.string("settings.general.enable-feedback"), isOn: $settings.isEnabled)
+                Toggle(localization.localizer.string("settings.general.launch-at-login"), isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
                         do {
                             try LoginItem.set(newValue)
@@ -259,8 +261,8 @@ struct GeneralSettingsView: View {
             }
 
             if deviceTargets.count > 1 {
-                Section("settings.general.devices.section") {
-                    Picker("settings.general.devices.picker", selection: $settings.hapticDevice) {
+                Section(localization.localizer.string("settings.general.devices.section")) {
+                    Picker(localization.localizer.string("settings.general.devices.picker"), selection: $settings.hapticDevice) {
                         ForEach(deviceTargets) { target in
                             Text(verbatim: label(for: target)).tag(target)
                         }
@@ -285,18 +287,18 @@ struct GeneralSettingsView: View {
                 }
             }
 
-            Section("settings.general.permission.section") {
+            Section(localization.localizer.string("settings.general.permission.section")) {
                 if permission.isTrusted {
-                    Label("settings.general.permission.granted", systemImage: "checkmark.circle.fill")
+                    Label(localization.localizer.string("settings.general.permission.granted"), systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                 } else {
-                    Label("settings.general.permission.required", systemImage: "exclamationmark.triangle.fill")
+                    Label(localization.localizer.string("settings.general.permission.required"), systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Button("settings.general.permission.open-settings") {
+                    Button(localization.localizer.string("settings.general.permission.open-settings")) {
                         permission.openSystemSettings()
                     }
                 }
-                Text("settings.general.permission.explanation")
+                Text(verbatim: localization.localizer.string("settings.general.permission.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -348,17 +350,18 @@ struct GeneralSettingsView: View {
 
 struct HapticsSettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
 
     var body: some View {
         Form {
             Section {
-                Toggle("settings.haptics.enhanced", isOn: $settings.useEnhancedHaptics)
+                Toggle(localization.localizer.string("settings.haptics.enhanced"), isOn: $settings.useEnhancedHaptics)
                 if ActuatorHapticEngine.shared == nil {
-                    Label("settings.haptics.enhanced.unavailable", systemImage: "exclamationmark.triangle")
+                    Label(localization.localizer.string("settings.haptics.enhanced.unavailable"), systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(.orange)
                 } else {
-                    Text("settings.haptics.enhanced.explanation")
+                    Text(verbatim: localization.localizer.string("settings.haptics.enhanced.explanation"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -369,21 +372,21 @@ struct HapticsSettingsView: View {
                     CategoryRow(category: category)
                 }
             } header: {
-                Text("settings.haptics.elements.section")
+                Text(verbatim: localization.localizer.string("settings.haptics.elements.section"))
             } footer: {
-                Text("settings.haptics.elements.explanation")
+                Text(verbatim: localization.localizer.string("settings.haptics.elements.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("settings.haptics.quiet-modes.section") {
-                Toggle("settings.haptics.simple-mode", isOn: $settings.simpleMode)
-                Text("settings.haptics.simple-mode.explanation")
+            Section(localization.localizer.string("settings.haptics.quiet-modes.section")) {
+                Toggle(localization.localizer.string("settings.haptics.simple-mode"), isOn: $settings.simpleMode)
+                Text(verbatim: localization.localizer.string("settings.haptics.simple-mode.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Toggle("settings.haptics.focused-window-only", isOn: $settings.focusedWindowButtonsOnly)
-                Text("settings.haptics.focused-window-only.explanation")
+                Toggle(localization.localizer.string("settings.haptics.focused-window-only"), isOn: $settings.focusedWindowButtonsOnly)
+                Text(verbatim: localization.localizer.string("settings.haptics.focused-window-only.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -452,8 +455,8 @@ struct SoundPicker: View {
 
     var body: some View {
         Picker(selection: $selection) {
-            Text("settings.sound.assignment.default").tag("default")
-            Text("settings.sound.assignment.none").tag("none")
+            Text(verbatim: localization.localizer.string("settings.sound.assignment.default")).tag("default")
+            Text(verbatim: localization.localizer.string("settings.sound.assignment.none")).tag("none")
             Divider()
             ForEach(AudioFeedbackEngine.synthSounds, id: \.self) { identifier in
                 Text(verbatim: localizedSoundName(identifier)).tag(identifier)
@@ -510,21 +513,21 @@ struct VibrationSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("settings.vibration.enable", isOn: $settings.vibrateOnHover)
-                Text("settings.vibration.explanation")
+                Toggle(localization.localizer.string("settings.vibration.enable"), isOn: $settings.vibrateOnHover)
+                Text(verbatim: localization.localizer.string("settings.vibration.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
-                Picker("settings.vibration.rhythm", selection: $settings.vibrationMode) {
+                Picker(localization.localizer.string("settings.vibration.rhythm"), selection: $settings.vibrationMode) {
                     ForEach(VibrationMode.allCases) { mode in
                         Text(verbatim: localization.localizer.string("settings.vibration.mode.\(mode.rawValue).name"))
                     }
                 }
                 .pickerStyle(.segmented)
 
-                Picker("settings.vibration.strength", selection: $settings.vibratePattern) {
+                Picker(localization.localizer.string("settings.vibration.strength"), selection: $settings.vibratePattern) {
                     ForEach(FeedbackPattern.allCases) { pattern in
                         Text(verbatim: localization.localizer.string("feedback.pattern.\(pattern.rawValue).name"))
                     }
@@ -582,7 +585,7 @@ private struct HoldToFeelButton: View {
                     .onChanged { _ in if !buzzing { start() } }
                     .onEnded { _ in stop() }
             )
-            .accessibilityLabel(Text("a11y.settings.vibration.hold-to-feel"))
+            .accessibilityLabel(Text(verbatim: localization.localizer.string("a11y.settings.vibration.hold-to-feel")))
             .onDisappear { stop() }
     }
 
@@ -646,18 +649,18 @@ struct KeyboardSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("settings.keyboard.enable", isOn: $settings.keyboardHapticsEnabled)
-                Text("settings.keyboard.explanation")
+                Toggle(localization.localizer.string("settings.keyboard.enable"), isOn: $settings.keyboardHapticsEnabled)
+                Text(verbatim: localization.localizer.string("settings.keyboard.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("settings.keyboard.fire-on.section") {
-                Toggle("settings.keyboard.shortcuts", isOn: $settings.keyboardShortcuts)
-                Toggle("settings.keyboard.every-key", isOn: $settings.keyboardAllKeys)
-                Toggle("settings.keyboard.modifier-keys", isOn: $settings.keyboardModifierKeys)
+            Section(localization.localizer.string("settings.keyboard.fire-on.section")) {
+                Toggle(localization.localizer.string("settings.keyboard.shortcuts"), isOn: $settings.keyboardShortcuts)
+                Toggle(localization.localizer.string("settings.keyboard.every-key"), isOn: $settings.keyboardAllKeys)
+                Toggle(localization.localizer.string("settings.keyboard.modifier-keys"), isOn: $settings.keyboardModifierKeys)
                 HStack {
-                    Text("settings.keyboard.waveform")
+                    Text(verbatim: localization.localizer.string("settings.keyboard.waveform"))
                     Spacer()
                     WaveformControl(
                         waveform: $settings.keyboardWaveform,
@@ -665,7 +668,7 @@ struct KeyboardSettingsView: View {
                     )
                 }
                 HStack {
-                    Text("settings.keyboard.sound")
+                    Text(verbatim: localization.localizer.string("settings.keyboard.sound"))
                     Spacer()
                     SoundPicker(
                         selection: $settings.keyboardSound,
@@ -707,9 +710,9 @@ struct KeyboardSettingsView: View {
                 }
                 ShortcutRecorder()
             } header: {
-                Text("settings.keyboard.custom-shortcuts.section")
+                Text(verbatim: localization.localizer.string("settings.keyboard.custom-shortcuts.section"))
             } footer: {
-                Text("settings.keyboard.custom-shortcuts.explanation")
+                Text(verbatim: localization.localizer.string("settings.keyboard.custom-shortcuts.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -717,7 +720,7 @@ struct KeyboardSettingsView: View {
             .opacity(settings.keyboardHapticsEnabled ? 1 : 0.45)
 
             Section {
-                Label("settings.keyboard.privacy", systemImage: "lock.shield.fill")
+                Label(localization.localizer.string("settings.keyboard.privacy"), systemImage: "lock.shield.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -764,7 +767,7 @@ private struct ShortcutRecorder: View {
                 )
             }
             if isRecording {
-                Text("settings.keyboard.escape-cancels")
+                Text(verbatim: localization.localizer.string("settings.keyboard.escape-cancels"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -830,8 +833,8 @@ struct VisualAidsView: View {
                     .listRowInsets(EdgeInsets())
             }
 
-            Section("settings.visual.cursor-ring.section") {
-                Toggle("settings.visual.cursor-ring.enable", isOn: $settings.hoverCircleEnabled)
+            Section(localization.localizer.string("settings.visual.cursor-ring.section")) {
+                Toggle(localization.localizer.string("settings.visual.cursor-ring.enable"), isOn: $settings.hoverCircleEnabled)
                 LabeledSlider(
                     title: localization.localizer.string("settings.visual.cursor-ring.size"),
                     value: $settings.hoverCircleDiameter,
@@ -860,12 +863,12 @@ struct VisualAidsView: View {
                     caption: nil
                 )
                 .disabled(!settings.hoverCircleEnabled || settings.hoverCircleFilled)
-                Toggle("settings.visual.cursor-ring.fill", isOn: $settings.hoverCircleFilled)
+                Toggle(localization.localizer.string("settings.visual.cursor-ring.fill"), isOn: $settings.hoverCircleFilled)
                     .disabled(!settings.hoverCircleEnabled)
             }
 
-            Section("settings.visual.element-highlight.section") {
-                Toggle("settings.visual.element-highlight.enable", isOn: $settings.elementHighlightEnabled)
+            Section(localization.localizer.string("settings.visual.element-highlight.section")) {
+                Toggle(localization.localizer.string("settings.visual.element-highlight.enable"), isOn: $settings.elementHighlightEnabled)
                 LabeledSlider(
                     title: localization.localizer.string("settings.visual.element-highlight.thickness"),
                     value: $settings.elementHighlightWidth,
@@ -883,7 +886,7 @@ struct VisualAidsView: View {
             }
 
             Section {
-                Toggle("settings.visual.crosshair.enable", isOn: $settings.crosshairEnabled)
+                Toggle(localization.localizer.string("settings.visual.crosshair.enable"), isOn: $settings.crosshairEnabled)
                 LabeledSlider(
                     title: localization.localizer.string("settings.visual.crosshair.thickness"),
                     value: $settings.crosshairWidth,
@@ -898,19 +901,19 @@ struct VisualAidsView: View {
                     caption: nil
                 )
                 .disabled(!settings.crosshairEnabled)
-                Toggle("settings.visual.hover-caption.enable", isOn: $settings.hoverCaptionEnabled)
-                Toggle("settings.visual.fire-flash.enable", isOn: $settings.fireFlashEnabled)
+                Toggle(localization.localizer.string("settings.visual.hover-caption.enable"), isOn: $settings.hoverCaptionEnabled)
+                Toggle(localization.localizer.string("settings.visual.fire-flash.enable"), isOn: $settings.fireFlashEnabled)
             } header: {
-                Text("settings.visual.more-aids.section")
+                Text(verbatim: localization.localizer.string("settings.visual.more-aids.section"))
             } footer: {
-                Text("settings.visual.more-aids.explanation")
+                Text(verbatim: localization.localizer.string("settings.visual.more-aids.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("settings.visual.colors.section") {
-                ColorPicker("settings.visual.colors.clickable", selection: colorBinding(\.clickableColorHex, fallback: .systemGreen))
-                ColorPicker("settings.visual.colors.dangerous", selection: colorBinding(\.dangerColorHex, fallback: .systemRed))
+            Section(localization.localizer.string("settings.visual.colors.section")) {
+                ColorPicker(localization.localizer.string("settings.visual.colors.clickable"), selection: colorBinding(\.clickableColorHex, fallback: .systemGreen))
+                ColorPicker(localization.localizer.string("settings.visual.colors.dangerous"), selection: colorBinding(\.dangerColorHex, fallback: .systemRed))
             }
         }
         .formStyle(.grouped)
@@ -1008,7 +1011,7 @@ private struct VisualAidPreview: View {
 
                     if !settings.hoverCircleEnabled && !settings.elementHighlightEnabled
                         && !settings.crosshairEnabled && !settings.hoverCaptionEnabled && !settings.fireFlashEnabled {
-                        Text("settings.visual.preview.empty")
+                        Text(verbatim: localization.localizer.string("settings.visual.preview.empty"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .position(x: w / 2, y: geo.size.height - 12)
@@ -1018,7 +1021,7 @@ private struct VisualAidPreview: View {
         }
         .background(Color(nsColor: .underPageBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .accessibilityLabel(Text("a11y.settings.visual.preview"))
+        .accessibilityLabel(Text(verbatim: localization.localizer.string("a11y.settings.visual.preview")))
     }
 
     private func sample(_ title: String, frame: CGRect, highlighted: Bool, color: Color) -> some View {
@@ -1066,28 +1069,28 @@ struct SoundSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("settings.sound.enable", isOn: $settings.audioEnabled)
-                Text("settings.sound.explanation")
+                Toggle(localization.localizer.string("settings.sound.enable"), isOn: $settings.audioEnabled)
+                Text(verbatim: localization.localizer.string("settings.sound.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
-                Picker("settings.sound.picker", selection: $settings.audioSoundName) {
-                    Section("settings.sound.synthesized.section") {
+                Picker(localization.localizer.string("settings.sound.picker"), selection: $settings.audioSoundName) {
+                    Section(localization.localizer.string("settings.sound.synthesized.section")) {
                         ForEach(AudioFeedbackEngine.synthSounds, id: \.self) { identifier in
                             if let style = SynthClickEngine.Style(identifier: identifier) {
                                 Text(verbatim: style.localizedName(using: localization.localizer)).tag(identifier)
                             }
                         }
                     }
-                    Section("settings.sound.system.section") {
+                    Section(localization.localizer.string("settings.sound.system.section")) {
                         ForEach(AudioFeedbackEngine.availableSounds, id: \.self) { name in
                             Text(verbatim: name).tag(name)
                         }
                     }
                     if !customSounds.isEmpty {
-                        Section("settings.sound.imported.section") {
+                        Section(localization.localizer.string("settings.sound.imported.section")) {
                             ForEach(customSounds, id: \.self) { identifier in
                                 Text(verbatim: AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
                             }
@@ -1115,7 +1118,7 @@ struct SoundSettingsView: View {
                     .onChange(of: settings.audioPitch) { _, _ in
                         playPreview()
                     }
-                    Toggle("settings.sound.vary-tone", isOn: $settings.audioToneVariation)
+                    Toggle(localization.localizer.string("settings.sound.vary-tone"), isOn: $settings.audioToneVariation)
                         .onChange(of: settings.audioToneVariation) { _, _ in
                             playPreview()
                         }
@@ -1139,16 +1142,16 @@ struct SoundSettingsView: View {
                 }
 
                 HStack {
-                    Button("settings.sound.import") { importSound() }
+                    Button(localization.localizer.string("settings.sound.import")) { importSound() }
                     if AudioFeedbackEngine.customFilename(from: settings.audioSoundName) != nil {
-                        Button("settings.sound.remove") {
+                        Button(localization.localizer.string("settings.sound.remove")) {
                             AudioFeedbackEngine.removeSound(settings.audioSoundName)
                             settings.audioSoundName = AudioFeedbackEngine.availableSounds[0]
                             customSounds = AudioFeedbackEngine.customSounds()
                         }
                     }
                     Spacer()
-                    Button("settings.sound.test") { playPreview() }
+                    Button(localization.localizer.string("settings.sound.test")) { playPreview() }
                 }
             } footer: {
                 if let importError {
@@ -1156,7 +1159,7 @@ struct SoundSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 } else {
-                    Text("settings.sound.picker.explanation")
+                    Text(verbatim: localization.localizer.string("settings.sound.picker.explanation"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1220,8 +1223,8 @@ struct PerformanceSettingsView: View {
                 )
                 .disabled(settings.noLagMode)
 
-                Toggle("settings.performance.no-lag", isOn: $settings.noLagMode)
-                Text("settings.performance.no-lag.explanation")
+                Toggle(localization.localizer.string("settings.performance.no-lag"), isOn: $settings.noLagMode)
+                Text(verbatim: localization.localizer.string("settings.performance.no-lag.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1300,7 +1303,7 @@ struct AboutView: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
-                    Button("settings.about.check-for-updates") { updater.checkForUpdates() }
+                    Button(localization.localizer.string("settings.about.check-for-updates")) { updater.checkForUpdates() }
                         .disabled(!updater.canCheckForUpdates)
                         .padding(.top, 2)
                 }
@@ -1323,7 +1326,7 @@ struct AboutView: View {
                     "format.settings.about.made-by",
                     arguments: ["❤️", "Mason Chen"]
                 ))
-                    .accessibilityLabel(Text("a11y.settings.about.made-by"))
+                    .accessibilityLabel(Text(verbatim: localization.localizer.string("a11y.settings.about.made-by")))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .listRowBackground(Color.clear)

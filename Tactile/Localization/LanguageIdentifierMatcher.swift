@@ -71,8 +71,11 @@ nonisolated enum LanguageIdentifierMatcher {
             }
         }
 
+        var variants: Set<String> = []
         while index < rawTokens.count, isVariant(rawTokens[index]) {
-            normalized.append(rawTokens[index].lowercased())
+            let variant = rawTokens[index].lowercased()
+            guard variants.insert(variant).inserted else { return nil }
+            normalized.append(variant)
             index += 1
         }
 
@@ -147,6 +150,11 @@ nonisolated enum LanguageIdentifierMatcher {
 
         let ranked = candidates.compactMap { candidate -> (Tag, Int)? in
             guard candidate.language == preferred.language else { return nil }
+            // A variant/extlang-specific package is not a generic package.
+            // Such packages are selected only by the exact match above.
+            let baseCount = 1 + (candidate.explicitScript == nil ? 0 : 1)
+                + (candidate.explicitRegion == nil ? 0 : 1)
+            guard candidate.identifier.split(separator: "-").count == baseCount else { return nil }
             if let candidateScript = candidate.explicitScript,
                candidateScript.caseInsensitiveCompare(preferred.likelyScript ?? "") != .orderedSame {
                 return nil

@@ -73,7 +73,7 @@ a11y.*
 error.*
 ```
 
-普通短文本可以使用 SwiftUI 的 `LocalizedStringKey`；动态文案、AppKit 文案、错误和 hover caption 使用 `Localizer` 查找。格式化文案必须保留英文基准中的 printf 占位符数量和类型。位置标记只用于调整参数顺序，校验时会忽略位置编号，例如 `%1$@` 与 `%@` 的类型签名相同，但不能增删 `%@`、`%d` 等占位符。
+所有应用文案都通过 `Localizer` 查找，包括 SwiftUI 的普通短文本，以保证逐键英文回退与手动选择的语言一致。已解析的文案使用 `Text(verbatim:)` 或接受动态 `String` 的控件构造器，避免二次本地化。格式化文案必须保留英文基准中每个参数的 printf 类型。位置标记可以调整显示顺序，例如 `%d %@` 可以翻译为 `%2$@ %1$d`，但不能改成 `%1$@ %2$d`；宽度和精度的星号参数同样参与类型检查。
 
 复数文案使用 `.stringsdict`，不要在 Swift 中拼接 `pulse/pulses`、`line/lines` 等词。每个 plural 键的 `NSStringLocalizedFormatKey`、变量名、变量下的格式键/复数类别以及占位符签名都必须与英文基准兼容。
 
@@ -97,6 +97,14 @@ swift scripts/validate_localizations.swift
 ```
 
 校验器会扫描所有 `.lproj`，检查 `.strings` 语法、重复键、空值、英文键集合、显示名、printf 占位符和 `.stringsdict` plural 结构，并直接编译生产 `LanguageIdentifierMatcher.swift` 运行固定的 BCP-47 匹配矩阵。发现问题时以非零状态退出。
+
+完整的自动验证（包含以下 Debug 构建）可以一次运行：
+
+```bash
+bash scripts/test_localization.sh
+```
+
+该脚本还直接编译生产 Localizer，分别验证源码资源和 App 内资源的复数、参数重排、逐键回退与语言包发现；随后链接真实 Debug 模块，验证语言状态、系统通知、已删除语言包的规范化、Profile JSON 和旧快捷键兼容性。测试使用独立的临时 Bundle 和 UserDefaults suite，不启动反馈管线，也不修改用户现有设置。所有构建和测试产物都在 `/private/tmp`。
 
 无签名 Debug 构建使用 Xcode 26.6 和临时构建目录：
 

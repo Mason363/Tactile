@@ -241,7 +241,7 @@ struct SettingsProfile: Codable, Identifiable {
 
 @MainActor
 final class SettingsStore: ObservableObject {
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
 
     /// The UI language is deliberately global rather than profile-scoped.
     /// Persist only the stable `system` / `pack:<identifier>` representation.
@@ -531,7 +531,8 @@ final class SettingsStore: ObservableObject {
         didSet { setCodable(profiles, forKey: "profiles") }
     }
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         languageSelection = LanguageSelection(
             storageValue: defaults.string(forKey: "languageSelection") ?? "system"
         )

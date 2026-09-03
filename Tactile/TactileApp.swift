@@ -28,10 +28,10 @@ struct TactileApp: App {
             // at-a-glance signal that accessibility permission is missing.
             if controller.permission.isTrusted {
                 Image(nsImage: Self.menuBarIcon)
-                    .accessibilityLabel(Text("a11y.menu-bar.tactile"))
+                    .accessibilityLabel(Text(verbatim: localization.localizer.string("a11y.menu-bar.tactile")))
             } else {
                 Image(systemName: "cursorarrow.slash")
-                    .accessibilityLabel(Text("a11y.menu-bar.permission-needed"))
+                    .accessibilityLabel(Text(verbatim: localization.localizer.string("a11y.menu-bar.permission-needed")))
             }
         }
         .menuBarExtraStyle(.menu)

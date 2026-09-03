@@ -30,10 +30,10 @@ struct PlaygroundView: View {
                     noteKey: "settings.playground.buttons.note"
                 ) {
                     HStack(spacing: 12) {
-                        Button("settings.playground.buttons.button") {}
-                        Button("settings.playground.buttons.delete") {}
-                        Button("settings.playground.buttons.disabled") {}.disabled(true)
-                        Link("settings.playground.buttons.link", destination: URL(string: "https://example.com")!)
+                        Button(localization.localizer.string("settings.playground.buttons.button")) {}
+                        Button(localization.localizer.string("settings.playground.buttons.delete")) {}
+                        Button(localization.localizer.string("settings.playground.buttons.disabled")) {}.disabled(true)
+                        Link(localization.localizer.string("settings.playground.buttons.link"), destination: URL(string: "https://example.com")!)
                     }
                 }
 
@@ -42,16 +42,16 @@ struct PlaygroundView: View {
                     noteKey: "settings.playground.state.note"
                 ) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Toggle("settings.playground.state.checked-checkbox", isOn: $checkedOn)
+                        Toggle(localization.localizer.string("settings.playground.state.checked-checkbox"), isOn: $checkedOn)
                             .toggleStyle(.checkbox)
-                        Toggle("settings.playground.state.unchecked-checkbox", isOn: $checkedOff)
+                        Toggle(localization.localizer.string("settings.playground.state.unchecked-checkbox"), isOn: $checkedOff)
                             .toggleStyle(.checkbox)
-                        Toggle("settings.playground.state.switch", isOn: $checkedOn)
+                        Toggle(localization.localizer.string("settings.playground.state.switch"), isOn: $checkedOn)
                             .toggleStyle(.switch)
-                        Picker("settings.playground.state.tabs", selection: $pickedTab) {
-                            Text("settings.playground.state.tab-one").tag("One")
-                            Text("settings.playground.state.tab-two").tag("Two")
-                            Text("settings.playground.state.tab-three").tag("Three")
+                        Picker(localization.localizer.string("settings.playground.state.tabs"), selection: $pickedTab) {
+                            Text(verbatim: localization.localizer.string("settings.playground.state.tab-one")).tag("One")
+                            Text(verbatim: localization.localizer.string("settings.playground.state.tab-two")).tag("Two")
+                            Text(verbatim: localization.localizer.string("settings.playground.state.tab-three")).tag("Three")
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
@@ -64,14 +64,14 @@ struct PlaygroundView: View {
                     noteKey: "settings.playground.other-elements.note"
                 ) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Slider(value: $sliderValue) { Text("settings.playground.other-elements.slider") }
+                        Slider(value: $sliderValue) { Text(verbatim: localization.localizer.string("settings.playground.other-elements.slider")) }
                             .frame(width: 260)
-                        TextField("settings.playground.other-elements.text-field", text: $text)
+                        TextField(localization.localizer.string("settings.playground.other-elements.text-field"), text: $text)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 260)
-                        Menu("settings.playground.other-elements.menu") {
-                            Button("settings.playground.other-elements.first") {}
-                            Button("settings.playground.other-elements.second") {}
+                        Menu(localization.localizer.string("settings.playground.other-elements.menu")) {
+                            Button(localization.localizer.string("settings.playground.other-elements.first")) {}
+                            Button(localization.localizer.string("settings.playground.other-elements.second")) {}
                         }
                         .frame(width: 160)
                     }
@@ -85,15 +85,15 @@ struct PlaygroundView: View {
     /// A titled, softly-boxed group - the visual grouping a Form gave us,
     /// without the List that breaks the controls' accessibility.
     private func card<Content: View>(
-        titleKey: LocalizedStringKey,
-        noteKey: LocalizedStringKey,
+        titleKey: String,
+        noteKey: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(titleKey)
+            Text(verbatim: localization.localizer.string(titleKey))
                 .font(.headline)
             content()
-            Text(noteKey)
+            Text(verbatim: localization.localizer.string(noteKey))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

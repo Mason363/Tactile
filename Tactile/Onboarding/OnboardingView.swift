@@ -41,7 +41,7 @@ struct OnboardingView: View {
                 Text(verbatim: localization.localizer.string("onboarding.trusted-description"))
                     .multilineTextAlignment(.center)
 
-                Button("onboarding.done") {
+                Button(localization.localizer.string("onboarding.done")) {
                     OnboardingWindow.close()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -80,7 +80,7 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                Button("onboarding.open-accessibility-settings") {
+                Button(localization.localizer.string("onboarding.open-accessibility-settings")) {
                     permission.openSystemSettings()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -115,9 +115,11 @@ enum OnboardingWindow {
             newWindow.center()
             window = newWindow
             titleObservation = controller.localization.$resolvedPack
-                .sink { [weak newWindow, weak controller] _ in
+                .sink { [weak newWindow, weak controller] pack in
                     guard let controller else { return }
-                    newWindow?.title = controller.localization.localizer.string("window.onboarding.title")
+                    newWindow?.title = Localizer(
+                        pack: pack, fallback: controller.localization.registry.englishPack
+                    ).string("window.onboarding.title")
                 }
         }
         NSApp.activate(ignoringOtherApps: true)

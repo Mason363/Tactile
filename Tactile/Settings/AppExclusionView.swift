@@ -20,7 +20,7 @@ struct AppExclusionView: View {
 
             Section {
                 if settings.excludedBundleIDs.isEmpty {
-                    Text("settings.apps.excluded.empty")
+                    Text(verbatim: localization.localizer.string("settings.apps.excluded.empty"))
                         .foregroundStyle(.secondary)
                 } else {
                     List(selection: $selection) {
@@ -33,8 +33,8 @@ struct AppExclusionView: View {
                 }
 
                 HStack {
-                    Menu("settings.apps.excluded.add") {
-                        Button("settings.apps.excluded.choose-applications") {
+                    Menu(localization.localizer.string("settings.apps.excluded.add")) {
+                        Button(localization.localizer.string("settings.apps.excluded.choose-applications")) {
                             chooseFromApplications()
                         }
                         Divider()
@@ -48,7 +48,7 @@ struct AppExclusionView: View {
                     }
                     .fixedSize()
 
-                    Button("settings.apps.excluded.remove") {
+                    Button(localization.localizer.string("settings.apps.excluded.remove")) {
                         if let selection {
                             settings.excludedBundleIDs.removeAll { $0 == selection }
                             self.selection = nil
@@ -57,9 +57,9 @@ struct AppExclusionView: View {
                     .disabled(selection == nil)
                 }
             } header: {
-                Text("settings.apps.excluded.title")
+                Text(verbatim: localization.localizer.string("settings.apps.excluded.title"))
             } footer: {
-                Text("settings.apps.excluded.footer")
+                Text(verbatim: localization.localizer.string("settings.apps.excluded.footer"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -113,33 +113,33 @@ private struct BrowserIntegrationSection: View {
     @State private var statusTick = 0
 
     var body: some View {
-        Section("settings.apps.browser.title") {
-            Toggle("settings.apps.browser.toggle", isOn: $settings.browserIntegrationEnabled)
-            Text("settings.apps.browser.description")
+        Section(localization.localizer.string("settings.apps.browser.title")) {
+            Toggle(localization.localizer.string("settings.apps.browser.toggle"), isOn: $settings.browserIntegrationEnabled)
+            Text(verbatim: localization.localizer.string("settings.apps.browser.description"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             if settings.browserIntegrationEnabled {
-                LabeledContent("settings.apps.browser.messaging-host") {
+                LabeledContent(localization.localizer.string("settings.apps.browser.messaging-host")) {
                     if installed {
-                        Label("settings.apps.browser.installed", systemImage: "checkmark.circle.fill")
+                        Label(localization.localizer.string("settings.apps.browser.installed"), systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                     } else {
-                        Label("settings.apps.browser.not-set-up", systemImage: "exclamationmark.circle")
+                        Label(localization.localizer.string("settings.apps.browser.not-set-up"), systemImage: "exclamationmark.circle")
                             .foregroundStyle(.orange)
                     }
                 }
 
-                Button("settings.apps.browser.setup-host") {
+                Button(localization.localizer.string("settings.apps.browser.setup-host")) {
                     controller.reinstallBrowserBridge()
                     statusTick += 1
                 }
 
-                Text("settings.apps.browser.extension-description")
+                Text(verbatim: localization.localizer.string("settings.apps.browser.extension-description"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Link("settings.apps.browser.get-extension",
+                Link(localization.localizer.string("settings.apps.browser.get-extension"),
                      destination: URL(string: "https://chromewebstore.google.com/detail/bkpkcddffbjipobgjlagggbbldefpldo?utm_source=item-share-cb")!)
                     .font(.caption)
             }

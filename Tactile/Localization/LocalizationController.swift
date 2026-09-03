@@ -22,12 +22,16 @@ final class LocalizationController: ObservableObject {
 
         settings.$languageSelection
             .removeDuplicates()
+            // @Published emits before the stored property changes. Resolve
+            // afterwards so normalization cannot be overwritten by that write.
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] selection in
                 self?.resolve(selection)
             }
             .store(in: &cancellables)
 
         NotificationCenter.default.publisher(for: NSLocale.currentLocaleDidChangeNotification)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.refreshSystemLanguage() }
             .store(in: &cancellables)
 

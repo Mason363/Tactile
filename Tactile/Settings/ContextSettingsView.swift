@@ -15,7 +15,7 @@ struct ContextSettingsView: View {
         Form {
             Section {
                 HStack {
-                    Toggle("settings.context.danger.toggle", isOn: $settings.dangerEnabled)
+                    Toggle(localization.localizer.string("settings.context.danger.toggle"), isOn: $settings.dangerEnabled)
                     Spacer()
                     WaveformControl(
                         waveform: $settings.dangerWaveform,
@@ -24,27 +24,27 @@ struct ContextSettingsView: View {
                         .disabled(!settings.dangerEnabled)
                 }
             } header: {
-                Text("settings.context.danger.title")
+                Text(verbatim: localization.localizer.string("settings.context.danger.title"))
             } footer: {
-                Text("settings.context.danger.footer")
+                Text(verbatim: localization.localizer.string("settings.context.danger.footer"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
-                Toggle("settings.context.state.checked-selected", isOn: $settings.stateAware)
-                Toggle("settings.context.state.disabled", isOn: $settings.feelDisabled)
+                Toggle(localization.localizer.string("settings.context.state.checked-selected"), isOn: $settings.stateAware)
+                Toggle(localization.localizer.string("settings.context.state.disabled"), isOn: $settings.feelDisabled)
             } header: {
-                Text("settings.context.state.title")
+                Text(verbatim: localization.localizer.string("settings.context.state.title"))
             } footer: {
-                Text("settings.context.state.footer")
+                Text(verbatim: localization.localizer.string("settings.context.state.footer"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
                 HStack {
-                    Toggle("settings.context.hover-out.toggle", isOn: $settings.hapticOnExit)
+                    Toggle(localization.localizer.string("settings.context.hover-out.toggle"), isOn: $settings.hapticOnExit)
                     Spacer()
                     WaveformControl(
                         waveform: $settings.exitWaveform,
@@ -53,16 +53,16 @@ struct ContextSettingsView: View {
                         .disabled(!settings.hapticOnExit)
                 }
             } header: {
-                Text("settings.context.hover-out.title")
+                Text(verbatim: localization.localizer.string("settings.context.hover-out.title"))
             } footer: {
-                Text("settings.context.hover-out.footer")
+                Text(verbatim: localization.localizer.string("settings.context.hover-out.footer"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
                 HStack {
-                    Toggle("settings.context.scrolling.toggle", isOn: $settings.scrollHapticsEnabled)
+                    Toggle(localization.localizer.string("settings.context.scrolling.toggle"), isOn: $settings.scrollHapticsEnabled)
                     Spacer()
                     WaveformControl(
                         waveform: $settings.scrollWaveform,
@@ -85,16 +85,16 @@ struct ContextSettingsView: View {
                 )
                 .disabled(!settings.scrollHapticsEnabled)
             } header: {
-                Text("settings.context.scrolling.title")
+                Text(verbatim: localization.localizer.string("settings.context.scrolling.title"))
             } footer: {
-                Text("settings.context.scrolling.footer")
+                Text(verbatim: localization.localizer.string("settings.context.scrolling.footer"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
                 HStack {
-                    Toggle("settings.context.spatial.screen-edges", isOn: $settings.screenEdgesEnabled)
+                    Toggle(localization.localizer.string("settings.context.spatial.screen-edges"), isOn: $settings.screenEdgesEnabled)
                     Spacer()
                     WaveformControl(
                         waveform: $settings.edgeWaveform,
@@ -103,7 +103,7 @@ struct ContextSettingsView: View {
                         .disabled(!settings.screenEdgesEnabled)
                 }
                 HStack {
-                    Toggle("settings.context.spatial.window-boundaries", isOn: $settings.windowBoundsEnabled)
+                    Toggle(localization.localizer.string("settings.context.spatial.window-boundaries"), isOn: $settings.windowBoundsEnabled)
                     Spacer()
                     WaveformControl(
                         waveform: $settings.boundaryWaveform,
@@ -112,9 +112,9 @@ struct ContextSettingsView: View {
                         .disabled(!settings.windowBoundsEnabled)
                 }
             } header: {
-                Text("settings.context.spatial.title")
+                Text(verbatim: localization.localizer.string("settings.context.spatial.title"))
             } footer: {
-                Text("settings.context.spatial.footer")
+                Text(verbatim: localization.localizer.string("settings.context.spatial.footer"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
