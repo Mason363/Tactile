@@ -209,7 +209,7 @@ struct SoundImportView: View {
                     .foregroundStyle(.orange)
                     .frame(maxWidth: .infinity, minHeight: 120)
             } else {
-                ProgressView("settings.sound-import.reading-audio")
+                ProgressView(localization.localizer.string("settings.sound-import.reading-audio"))
                     .frame(maxWidth: .infinity, minHeight: 120)
             }
 

@@ -59,6 +59,15 @@ struct LocalizationRuntimeTests {
         try addPack("it", nil)
         try addPack("bad--tag", ["language.pack.display-name": "Invalid"])
         try addPack("Base", ["language.pack.display-name": "Base"])
+        try FileManager.default.copyItem(
+            at: resourceRoot.appendingPathComponent("en.lproj/Localizable.stringsdict"),
+            to: fixture.appendingPathComponent("en.lproj/Localizable.stringsdict")
+        )
+        try writePlist(["waveform.pulse-count": [
+            "NSStringLocalizedFormatKey": "%#@count@",
+            "count": ["NSStringFormatSpecTypeKey": "NSStringPluralRuleType",
+                      "NSStringFormatValueTypeKey": "q", "other": "%lld invalid"]
+        ]], to: fixture.appendingPathComponent("fr.lproj/Localizable.stringsdict"))
         let registry = LanguagePackRegistry(bundle: Bundle(url: fixture)!)
         expect(Set(registry.packs.map(\.identifier)) == ["en", "fr"], "Automatic discovery and invalid-pack exclusion")
         let french = Localizer(pack: registry.pack(identifier: "fr")!, fallback: registry.englishPack)
@@ -72,6 +81,7 @@ struct LocalizationRuntimeTests {
         expect(french.format("escaped", 7, "items") == "7% items", "Escaped percent")
         expect(french.format("malformed", 7, "items") == "7 items", "Malformed translation falls back safely")
         expect(french.format("star", 5, 2, 1.5).contains("1,50"), "Width/precision and explicit locale")
+        expect(french.plural("waveform.pulse-count", count: 1) == "1 pulse", "Incompatible plural falls back to English")
         expect(registry.resolve(selection: .system, systemIdentifier: "fr-FR").identifier == "fr", "Future generic French pack")
         expect(registry.resolve(selection: .system, systemIdentifier: "ja-JP").identifier == "en", "Unsupported system language")
         expect(registry.resolve(selection: .pack(identifier: "removed"), systemIdentifier: "fr-FR").identifier == "en", "Removed pack fallback")
