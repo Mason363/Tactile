@@ -4,11 +4,13 @@
 //
 
 import SwiftUI
+import Combine
 
 /// First-launch window that explains what Tactile does and walks the user
 /// through granting the Accessibility permission.
 struct OnboardingView: View {
     @EnvironmentObject private var permission: PermissionManager
+    @EnvironmentObject private var localization: LocalizationController
 
     var body: some View {
         VStack(spacing: 16) {
@@ -17,11 +19,17 @@ struct OnboardingView: View {
                 .foregroundStyle(permission.isTrusted ? .green : .accentColor)
                 .accessibilityHidden(true)
 
-            Text(permission.isTrusted ? "You're All Set" : "Welcome to Tactile")
+            Text(verbatim: localization.localizer.string(
+                permission.isTrusted ? "onboarding.ready-title" : "onboarding.welcome-title"
+            ))
                 .font(.title.bold())
 
             if !ActuatorHapticEngine.hasHapticTrackpad {
-                Label("This Mac has no Force Touch trackpad, so Tactile cannot produce haptic feedback. It needs a built-in MacBook trackpad or a Magic Trackpad. The visual aids and click sounds still work.", systemImage: "exclamationmark.triangle.fill")
+                Label {
+                    Text(verbatim: localization.localizer.string("onboarding.no-haptic-trackpad"))
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                }
                     .font(.callout)
                     .foregroundStyle(.orange)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -30,21 +38,33 @@ struct OnboardingView: View {
             }
 
             if permission.isTrusted {
-                Text("Tactile is now running in your menu bar. Move the cursor over buttons, links, and other controls to feel them under your finger.")
+                Text(verbatim: localization.localizer.string("onboarding.trusted-description"))
                     .multilineTextAlignment(.center)
 
-                Button("Done") {
+                Button("onboarding.done") {
                     OnboardingWindow.close()
                 }
                 .keyboardShortcut(.defaultAction)
             } else {
-                Text("Tactile taps the trackpad's haptic motor whenever your cursor passes over something clickable, so you can feel the interface, not just see it.")
+                Text(verbatim: localization.localizer.string("onboarding.introduction"))
                     .multilineTextAlignment(.center)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("Tactile needs the Accessibility permission to know what is under your cursor.", systemImage: "accessibility")
-                    Label("Everything happens on your Mac. Tactile only looks at the type of element under the cursor, never at your content.", systemImage: "lock.shield")
-                    Label("You can revoke the permission at any time in System Settings.", systemImage: "gearshape")
+                    Label {
+                        Text(verbatim: localization.localizer.string("onboarding.permission-explanation"))
+                    } icon: {
+                        Image(systemName: "accessibility")
+                    }
+                    Label {
+                        Text(verbatim: localization.localizer.string("onboarding.privacy-explanation"))
+                    } icon: {
+                        Image(systemName: "lock.shield")
+                    }
+                    Label {
+                        Text(verbatim: localization.localizer.string("onboarding.revoke-explanation"))
+                    } icon: {
+                        Image(systemName: "gearshape")
+                    }
                 }
                 .font(.callout)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -52,15 +72,15 @@ struct OnboardingView: View {
                 .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("1. Click the button below to open System Settings.")
-                    Text("2. Find Tactile in the list and turn it on.")
-                    Text("3. Come back here. Tactile starts automatically.")
+                    Text(verbatim: localization.localizer.string("onboarding.step-1"))
+                    Text(verbatim: localization.localizer.string("onboarding.step-2"))
+                    Text(verbatim: localization.localizer.string("onboarding.step-3"))
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                Button("Open Accessibility Settings") {
+                Button("onboarding.open-accessibility-settings") {
                     permission.openSystemSettings()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -79,19 +99,26 @@ struct OnboardingView: View {
 @MainActor
 enum OnboardingWindow {
     private static var window: NSWindow?
+    private static var titleObservation: AnyCancellable?
 
     static func show(controller: AppController) {
         if window == nil {
-            let view = OnboardingView()
+            let content = OnboardingView()
                 .environmentObject(controller)
                 .environmentObject(controller.permission)
+            let view = LocalizedRoot(localization: controller.localization, content: content)
             let hosting = NSHostingController(rootView: view)
             let newWindow = NSWindow(contentViewController: hosting)
-            newWindow.title = "Welcome to Tactile"
+            newWindow.title = controller.localization.localizer.string("window.onboarding.title")
             newWindow.styleMask = [.titled, .closable]
             newWindow.isReleasedWhenClosed = false
             newWindow.center()
             window = newWindow
+            titleObservation = controller.localization.$resolvedPack
+                .sink { [weak newWindow, weak controller] _ in
+                    guard let controller else { return }
+                    newWindow?.title = controller.localization.localizer.string("window.onboarding.title")
+                }
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)

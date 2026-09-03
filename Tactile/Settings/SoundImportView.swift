@@ -6,6 +6,13 @@
 import AVFoundation
 import SwiftUI
 
+enum SoundImportError: Error {
+    case emptyFile
+    case unreadableAudio
+    case emptySelection
+    case unplayableClip
+}
+
 /// The audio work behind the import editor, kept UI-free so it can be
 /// exercised without a window: waveform peaks for display, and trimming a
 /// selection out to the sound library.
@@ -27,14 +34,14 @@ enum SoundImportSupport {
         let format = file.processingFormat
         let totalFrames = min(file.length, AVAudioFramePosition(maxSeconds * format.sampleRate))
         guard totalFrames > 0 else {
-            throw NSError(domain: "Tactile", code: 1, userInfo: [NSLocalizedDescriptionKey: "The file contains no audio."])
+            throw SoundImportError.emptyFile
         }
 
         var bins = [Float](repeating: 0, count: binCount)
         let framesPerBin = max(Int(totalFrames) / binCount, 1)
         let chunkFrames: AVAudioFrameCount = 65_536
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunkFrames) else {
-            throw NSError(domain: "Tactile", code: 2, userInfo: [NSLocalizedDescriptionKey: "Couldn't read the audio."])
+            throw SoundImportError.unreadableAudio
         }
 
         var frameIndex = 0
@@ -73,7 +80,7 @@ enum SoundImportSupport {
         let startFrame = AVAudioFramePosition(Double(totalFrames) * max(0, min(startFraction, 1)))
         let endFrame = AVAudioFramePosition(Double(totalFrames) * max(0, min(endFraction, 1)))
         guard endFrame > startFrame else {
-            throw NSError(domain: "Tactile", code: 3, userInfo: [NSLocalizedDescriptionKey: "The selection is empty."])
+            throw SoundImportError.emptySelection
         }
 
         let base = url.deletingPathExtension().lastPathComponent
@@ -98,7 +105,7 @@ enum SoundImportSupport {
         let writer = try AVAudioFile(forWriting: destination, settings: fileSettings)
         let chunkFrames: AVAudioFrameCount = 65_536
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunkFrames) else {
-            throw NSError(domain: "Tactile", code: 2, userInfo: [NSLocalizedDescriptionKey: "Couldn't read the audio."])
+            throw SoundImportError.unreadableAudio
         }
 
         source.framePosition = startFrame
@@ -114,7 +121,7 @@ enum SoundImportSupport {
         // Reject silence or write failures rather than saving a dud.
         guard NSSound(contentsOf: destination, byReference: true) != nil else {
             try? FileManager.default.removeItem(at: destination)
-            throw NSError(domain: "Tactile", code: 4, userInfo: [NSLocalizedDescriptionKey: "Couldn't save a playable clip."])
+            throw SoundImportError.unplayableClip
         }
         return "custom:" + name
     }
@@ -159,17 +166,18 @@ struct SoundImportView: View {
     var onSave: (String) -> Void
 
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
     @Environment(\.dismiss) private var dismiss
 
     @State private var info: SoundImportSupport.Info?
-    @State private var loadError: String?
+    @State private var loadError: SoundImportFailure?
     @State private var start: Double = 0
     @State private var end: Double = 1
     @State private var preview = SoundImportPreview()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(url.lastPathComponent)
+            Text(verbatim: url.lastPathComponent)
                 .font(.headline)
 
             if let info {
@@ -177,27 +185,31 @@ struct SoundImportView: View {
                     .frame(height: 120)
 
                 HStack {
-                    Text(rangeText(info))
+                    Text(verbatim: rangeText(info))
                         .font(.caption)
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Reset Crop") {
+                    Button("settings.sound-import.reset-crop") {
                         start = 0
                         end = 1
                     }
                     .disabled(start == 0 && end == 1)
                 }
 
-                Text("Drag the edges to crop. Short clips work best as clicks.")
+                Text("settings.sound-import.crop-help")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if let loadError {
-                Label(loadError, systemImage: "exclamationmark.triangle")
+                Label {
+                    Text(verbatim: loadError.localized(using: localization.localizer))
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                }
                     .foregroundStyle(.orange)
                     .frame(maxWidth: .infinity, minHeight: 120)
             } else {
-                ProgressView("Reading audio…")
+                ProgressView("settings.sound-import.reading-audio")
                     .frame(maxWidth: .infinity, minHeight: 120)
             }
 
@@ -205,25 +217,25 @@ struct SoundImportView: View {
                 Button {
                     preview.play(url: url, startFraction: start, endFraction: end, volume: settings.audioVolume)
                 } label: {
-                    Label("Play", systemImage: "play.fill")
+                    Label("settings.sound-import.play", systemImage: "play.fill")
                 }
                 .disabled(info == nil)
 
                 Spacer()
 
-                Button("Cancel") {
+                Button("settings.sound-import.cancel") {
                     preview.stop()
                     dismiss()
                 }
 
-                Button("Save Sound") {
+                Button("settings.sound-import.save-sound") {
                     preview.stop()
                     do {
                         let identifier = try SoundImportSupport.saveTrimmed(from: url, startFraction: start, endFraction: end)
                         onSave(identifier)
                         dismiss()
                     } catch {
-                        loadError = error.localizedDescription
+                        loadError = SoundImportFailure(error: error)
                     }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -236,7 +248,7 @@ struct SoundImportView: View {
             do {
                 info = try SoundImportSupport.loadInfo(from: url)
             } catch {
-                loadError = error.localizedDescription
+                loadError = SoundImportFailure(error: error)
             }
         }
         .onDisappear { preview.stop() }
@@ -245,7 +257,50 @@ struct SoundImportView: View {
     private func rangeText(_ info: SoundImportSupport.Info) -> String {
         let from = info.duration * start
         let to = info.duration * end
-        return String(format: "%.2fs to %.2fs of %.2fs (%.2fs clip)", from, to, info.duration, to - from)
+        return localization.localizer.format(
+            "format.sound-import-range",
+            from,
+            to,
+            info.duration,
+            to - from
+        )
+    }
+
+}
+
+private enum SoundImportFailure {
+    case custom(SoundImportError)
+    case system(description: String)
+
+    init(error: Error) {
+        if let error = error as? SoundImportError {
+            self = .custom(error)
+        } else {
+            self = .system(description: error.localizedDescription)
+        }
+    }
+
+    func localized(using localizer: Localizer) -> String {
+        switch self {
+        case .custom(.emptyFile):
+            return localizer.string(
+                "error.sound-import.empty-file"
+            )
+        case .custom(.unreadableAudio):
+            return localizer.string(
+                "error.sound-import.unreadable-audio"
+            )
+        case .custom(.emptySelection):
+            return localizer.string(
+                "error.sound-import.empty-selection"
+            )
+        case .custom(.unplayableClip):
+            return localizer.string(
+                "error.sound-import.unplayable-clip"
+            )
+        case .system(let description):
+            return description
+        }
     }
 }
 
@@ -295,7 +350,7 @@ private struct WaveformCropView: View {
                                 start = min(max(0, value.location.x / width), end - minimumSpan)
                             }
                     )
-                    .accessibilityLabel("Crop start")
+                    .accessibilityLabel("a11y.sound-import-crop-start")
                 handle(at: width * end, height: height)
                     .gesture(
                         DragGesture(minimumDistance: 0)
@@ -303,7 +358,7 @@ private struct WaveformCropView: View {
                                 end = max(min(1, value.location.x / width), start + minimumSpan)
                             }
                     )
-                    .accessibilityLabel("Crop end")
+                    .accessibilityLabel("a11y.sound-import-crop-end")
             }
         }
     }

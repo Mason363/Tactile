@@ -24,7 +24,11 @@ final class SynthClickEngine {
 
         var identifier: String { Self.prefix + rawValue }
 
-        var displayName: String { rawValue.prefix(1).uppercased() + rawValue.dropFirst() }
+        var nameLocalizationKey: String { "settings.sound.style.\(rawValue).name" }
+
+        func localizedName(using localizer: Localizer) -> String {
+            localizer.string(nameLocalizationKey)
+        }
 
         init?(identifier: String) {
             guard identifier.hasPrefix(Self.prefix) else { return nil }

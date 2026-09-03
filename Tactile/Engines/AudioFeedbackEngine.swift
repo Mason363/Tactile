@@ -108,8 +108,16 @@ final class AudioFeedbackEngine: FeedbackEngine {
 
     /// Human name for any identifier: system name as-is, filename sans extension.
     static func displayName(for identifier: String) -> String {
-        if let style = SynthClickEngine.Style(identifier: identifier) { return style.displayName }
         guard let filename = customFilename(from: identifier) else { return identifier }
         return (filename as NSString).deletingPathExtension
+    }
+
+    /// Localizes synthesized style names while preserving system sound names
+    /// and user-imported filenames verbatim.
+    static func localizedDisplayName(for identifier: String, using localizer: Localizer) -> String {
+        if let style = SynthClickEngine.Style(identifier: identifier) {
+            return style.localizedName(using: localizer)
+        }
+        return displayName(for: identifier)
     }
 }

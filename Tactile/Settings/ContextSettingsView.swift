@@ -9,91 +9,112 @@ import SwiftUI
 /// screen edges, and window boundaries.
 struct ContextSettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
 
     var body: some View {
         Form {
             Section {
                 HStack {
-                    Toggle("Warn on dangerous elements", isOn: $settings.dangerEnabled)
+                    Toggle("settings.context.danger.toggle", isOn: $settings.dangerEnabled)
                     Spacer()
-                    WaveformControl(waveform: $settings.dangerWaveform, accessibilityName: "dangerous elements")
+                    WaveformControl(
+                        waveform: $settings.dangerWaveform,
+                        accessibilityName: localization.localizer.string("a11y.context.dangerous-elements")
+                    )
                         .disabled(!settings.dangerEnabled)
                 }
             } header: {
-                Text("Danger")
+                Text("settings.context.danger.title")
             } footer: {
-                Text("Close buttons and controls labeled Delete, Remove, Reset, and the like play this warning instead of their normal feel. English labels only, for now.")
+                Text("settings.context.danger.footer")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
-                Toggle("Feel checked and selected state", isOn: $settings.stateAware)
-                Toggle("Feel disabled controls", isOn: $settings.feelDisabled)
+                Toggle("settings.context.state.checked-selected", isOn: $settings.stateAware)
+                Toggle("settings.context.state.disabled", isOn: $settings.feelDisabled)
             } header: {
-                Text("State")
+                Text("settings.context.state.title")
             } footer: {
-                Text("Checked boxes and selected tabs add a confirmation pulse; disabled controls give a single light pulse instead of silence.")
+                Text("settings.context.state.footer")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
                 HStack {
-                    Toggle("Play when leaving an element", isOn: $settings.hapticOnExit)
+                    Toggle("settings.context.hover-out.toggle", isOn: $settings.hapticOnExit)
                     Spacer()
-                    WaveformControl(waveform: $settings.exitWaveform, accessibilityName: "leaving an element")
+                    WaveformControl(
+                        waveform: $settings.exitWaveform,
+                        accessibilityName: localization.localizer.string("a11y.context.leaving-element")
+                    )
                         .disabled(!settings.hapticOnExit)
                 }
             } header: {
-                Text("Hover Out")
+                Text("settings.context.hover-out.title")
             } footer: {
-                Text("Marks both edges of a control so you can feel its extent.")
+                Text("settings.context.hover-out.footer")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
                 HStack {
-                    Toggle("Scroll haptics", isOn: $settings.scrollHapticsEnabled)
+                    Toggle("settings.context.scrolling.toggle", isOn: $settings.scrollHapticsEnabled)
                     Spacer()
-                    WaveformControl(waveform: $settings.scrollWaveform, accessibilityName: "scrolling")
+                    WaveformControl(
+                        waveform: $settings.scrollWaveform,
+                        accessibilityName: localization.localizer.string("a11y.context.scrolling")
+                    )
                         .disabled(!settings.scrollHapticsEnabled)
                 }
                 LabeledSlider(
-                    title: "Tick every",
+                    title: localization.localizer.string("settings.context.scrolling.tick-every"),
                     value: $settings.scrollLines,
                     range: 1...20,
                     step: 1,
-                    format: { "\(Int($0)) line\(Int($0) == 1 ? "" : "s")" },
+                    format: { value in
+                        localization.localizer.format(
+                            "format.lines",
+                            Int(value)
+                        )
+                    },
                     caption: nil
                 )
                 .disabled(!settings.scrollHapticsEnabled)
             } header: {
-                Text("Scrolling")
+                Text("settings.context.scrolling.title")
             } footer: {
-                Text("Feel scrolling go by, like the detents of a clicky scroll wheel.")
+                Text("settings.context.scrolling.footer")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
                 HStack {
-                    Toggle("Screen edges", isOn: $settings.screenEdgesEnabled)
+                    Toggle("settings.context.spatial.screen-edges", isOn: $settings.screenEdgesEnabled)
                     Spacer()
-                    WaveformControl(waveform: $settings.edgeWaveform, accessibilityName: "screen edges")
+                    WaveformControl(
+                        waveform: $settings.edgeWaveform,
+                        accessibilityName: localization.localizer.string("a11y.context.screen-edges")
+                    )
                         .disabled(!settings.screenEdgesEnabled)
                 }
                 HStack {
-                    Toggle("Window boundaries", isOn: $settings.windowBoundsEnabled)
+                    Toggle("settings.context.spatial.window-boundaries", isOn: $settings.windowBoundsEnabled)
                     Spacer()
-                    WaveformControl(waveform: $settings.boundaryWaveform, accessibilityName: "window boundaries")
+                    WaveformControl(
+                        waveform: $settings.boundaryWaveform,
+                        accessibilityName: localization.localizer.string("a11y.context.window-boundaries")
+                    )
                         .disabled(!settings.windowBoundsEnabled)
                 }
             } header: {
-                Text("Spatial")
+                Text("settings.context.spatial.title")
             } footer: {
-                Text("Bump at screen edges and when crossing between windows.")
+                Text("settings.context.spatial.footer")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

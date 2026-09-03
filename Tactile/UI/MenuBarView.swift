@@ -9,31 +9,37 @@ struct MenuBarView: View {
     @EnvironmentObject private var controller: AppController
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var permission: PermissionManager
+    @EnvironmentObject private var localization: LocalizationController
     @ObservedObject private var updater = Updater.shared
 
     var body: some View {
         if !ActuatorHapticEngine.hasHapticTrackpad {
-            Label("No haptic trackpad detected", systemImage: "exclamationmark.triangle.fill")
-            Text("Tactile needs a Force Touch trackpad to produce feedback.")
+            Label("menu.no-haptic-trackpad", systemImage: "exclamationmark.triangle.fill")
+            Text("menu.trackpad-requirement")
             Divider()
         }
 
         if !permission.isTrusted {
-            Button("Grant Accessibility Access…") {
+            Button("menu.grant-accessibility") {
                 OnboardingWindow.show(controller: controller)
             }
             Divider()
         }
 
-        Toggle("Haptic Feedback", isOn: $settings.isEnabled)
+        Toggle("menu.haptic-feedback", isOn: $settings.isEnabled)
             .disabled(!permission.isTrusted)
 
         if let until = controller.pausedUntil {
-            Button("Resume (paused until \(until.formatted(date: .omitted, time: .shortened)))") {
+            Button {
                 controller.resume()
+            } label: {
+                Text(verbatim: localization.localizer.format(
+                    "menu.resume-paused-until",
+                    until.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(localization.locale))
+                ))
             }
         } else {
-            Button("Pause for 15 Minutes") {
+            Button("menu.pause-15-minutes") {
                 controller.pause(for: 15 * 60)
             }
             .disabled(!settings.isEnabled || !permission.isTrusted)
@@ -42,29 +48,31 @@ struct MenuBarView: View {
         Divider()
 
         if !settings.profiles.isEmpty {
-            Menu("Profiles") {
+            Menu("menu.profiles") {
                 ForEach(settings.profiles) { profile in
-                    Toggle(profile.name, isOn: Binding(
+                    Toggle(isOn: Binding(
                         get: { settings.activeProfileID == profile.id },
                         set: { _ in settings.applyProfile(profile) }
-                    ))
+                    )) {
+                        Text(verbatim: profile.name)
+                    }
                 }
             }
         }
 
-        Button("Settings…") {
+        Button("menu.settings") {
             SettingsWindow.show(controller: controller)
         }
         .keyboardShortcut(",")
 
-        Button("Check for Updates…") {
+        Button("menu.check-for-updates") {
             updater.checkForUpdates()
         }
         .disabled(!updater.canCheckForUpdates)
 
         Divider()
 
-        Button("Quit Tactile") {
+        Button("menu.quit-tactile") {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q")

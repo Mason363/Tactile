@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct AppExclusionView: View {
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var controller: AppController
+    @EnvironmentObject private var localization: LocalizationController
     @State private var selection: String?
 
     var body: some View {
@@ -19,7 +20,7 @@ struct AppExclusionView: View {
 
             Section {
                 if settings.excludedBundleIDs.isEmpty {
-                    Text("No excluded apps")
+                    Text("settings.apps.excluded.empty")
                         .foregroundStyle(.secondary)
                 } else {
                     List(selection: $selection) {
@@ -32,20 +33,22 @@ struct AppExclusionView: View {
                 }
 
                 HStack {
-                    Menu("Add App…") {
-                        Button("Choose from Applications…") {
+                    Menu("settings.apps.excluded.add") {
+                        Button("settings.apps.excluded.choose-applications") {
                             chooseFromApplications()
                         }
                         Divider()
                         ForEach(runningApps, id: \.bundleID) { app in
-                            Button(app.name) {
+                            Button {
                                 add(app.bundleID)
+                            } label: {
+                                Text(verbatim: app.name)
                             }
                         }
                     }
                     .fixedSize()
 
-                    Button("Remove") {
+                    Button("settings.apps.excluded.remove") {
                         if let selection {
                             settings.excludedBundleIDs.removeAll { $0 == selection }
                             self.selection = nil
@@ -54,9 +57,9 @@ struct AppExclusionView: View {
                     .disabled(selection == nil)
                 }
             } header: {
-                Text("Excluded Apps")
+                Text("settings.apps.excluded.title")
             } footer: {
-                Text("Tactile stays silent while the cursor is over these apps. Useful for games and drawing canvases.")
+                Text("settings.apps.excluded.footer")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -83,7 +86,10 @@ struct AppExclusionView: View {
         panel.allowedContentTypes = [.application]
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
-        panel.message = "Choose apps to exclude from haptic feedback"
+        let localizer = localization.localizer
+        panel.title = localizer.string("dialog.apps.choose-excluded.title")
+        panel.message = localizer.string("dialog.apps.choose-excluded.message")
+        panel.prompt = localizer.string("dialog.apps.choose-excluded.prompt")
         guard panel.runModal() == .OK else { return }
         for url in panel.urls {
             if let bundleID = Bundle(url: url)?.bundleIdentifier {
@@ -103,36 +109,37 @@ struct AppExclusionView: View {
 private struct BrowserIntegrationSection: View {
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var controller: AppController
+    @EnvironmentObject private var localization: LocalizationController
     @State private var statusTick = 0
 
     var body: some View {
-        Section("Browser Integration") {
-            Toggle("Chrome browser integration", isOn: $settings.browserIntegrationEnabled)
-            Text("While Chrome is frontmost, Tactile reads clickable elements from the page itself, including custom buttons invisible to macOS accessibility. Requires the companion Chrome extension.")
+        Section("settings.apps.browser.title") {
+            Toggle("settings.apps.browser.toggle", isOn: $settings.browserIntegrationEnabled)
+            Text("settings.apps.browser.description")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             if settings.browserIntegrationEnabled {
-                LabeledContent("Messaging host") {
+                LabeledContent("settings.apps.browser.messaging-host") {
                     if installed {
-                        Label("Installed", systemImage: "checkmark.circle.fill")
+                        Label("settings.apps.browser.installed", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                     } else {
-                        Label("Not set up", systemImage: "exclamationmark.circle")
+                        Label("settings.apps.browser.not-set-up", systemImage: "exclamationmark.circle")
                             .foregroundStyle(.orange)
                     }
                 }
 
-                Button("Set Up / Re-install Host") {
+                Button("settings.apps.browser.setup-host") {
                     controller.reinstallBrowserBridge()
                     statusTick += 1
                 }
 
-                Text("Then install the companion extension from the Chrome Web Store. It lets Tactile read buttons it would otherwise miss in the browser.")
+                Text("settings.apps.browser.extension-description")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Link("Get the Chrome extension",
+                Link("settings.apps.browser.get-extension",
                      destination: URL(string: "https://chromewebstore.google.com/detail/bkpkcddffbjipobgjlagggbbldefpldo?utm_source=item-share-cb")!)
                     .font(.caption)
             }
@@ -156,11 +163,11 @@ private struct ExcludedAppRow: View {
                     .resizable()
                     .frame(width: 20, height: 20)
                     .accessibilityHidden(true)
-                Text(Bundle(url: url)?.localizedName ?? bundleID)
+                Text(verbatim: Bundle(url: url)?.localizedName ?? bundleID)
             } else {
                 Image(systemName: "app.dashed")
                     .accessibilityHidden(true)
-                Text(bundleID)
+                Text(verbatim: bundleID)
             }
         }
     }

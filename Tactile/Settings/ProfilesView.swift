@@ -11,15 +11,16 @@ import UniformTypeIdentifiers
 /// menu bar), assign per app, and move as JSON.
 struct ProfilesView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
     @State private var newProfileName = ""
-    @State private var ioMessage: String?
+    @State private var ioMessage: IOMessage?
 
     var body: some View {
         Form {
             Section {
                 HStack {
-                    TextField("New profile name", text: $newProfileName)
-                    Button("Save Current") {
+                    TextField("settings.profiles.new-profile-name", text: $newProfileName)
+                    Button("settings.profiles.save-current") {
                         let name = newProfileName.trimmingCharacters(in: .whitespaces)
                         guard !name.isEmpty else { return }
                         settings.profiles.removeAll { $0.name == name }
@@ -32,33 +33,40 @@ struct ProfilesView: View {
                 }
 
                 if settings.profiles.isEmpty {
-                    Text("No profiles yet")
+                    Text("settings.profiles.no-profiles")
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach($settings.profiles) { $profile in
                         HStack {
                             Image(systemName: settings.activeProfileID == profile.id ? "checkmark.circle.fill" : "circle")
                                 .foregroundStyle(settings.activeProfileID == profile.id ? Color.accentColor : Color.secondary)
-                                .accessibilityLabel(settings.activeProfileID == profile.id ? "Active profile" : "Inactive profile")
-                            TextField("Profile name", text: $profile.name)
+                                .accessibilityLabel(Text(verbatim: localization.localizer.string(
+                                    settings.activeProfileID == profile.id
+                                        ? "settings.profiles.active-profile"
+                                        : "settings.profiles.inactive-profile"
+                                )))
+                            TextField("settings.profiles.profile-name", text: $profile.name)
                                 .textFieldStyle(.plain)
                             Spacer()
-                            Button("Apply") {
+                            Button("settings.profiles.apply") {
                                 settings.applyProfile(profile)
                             }
                             Menu {
-                                Button("Update with Current Settings") {
+                                Button("settings.profiles.update-with-current") {
                                     profile.snapshot = settings.makeSnapshot()
                                     settings.activeProfileID = profile.id
                                 }
-                                Button("Duplicate") {
+                                Button("settings.profiles.duplicate") {
                                     var copy = profile
                                     copy.id = UUID()
-                                    copy.name = profile.name + " Copy"
+                                    copy.name = localization.localizer.format(
+                                        "format.profile-copy-name",
+                                        profile.name
+                                    )
                                     settings.profiles.append(copy)
                                 }
                                 Divider()
-                                Button("Delete", role: .destructive) {
+                                Button("settings.profiles.delete", role: .destructive) {
                                     settings.appProfiles = settings.appProfiles.filter { $0.value != profile.id }
                                     settings.profiles.removeAll { $0.id == profile.id }
                                     if settings.activeProfileID == profile.id { settings.activeProfileID = nil }
@@ -68,21 +76,24 @@ struct ProfilesView: View {
                             }
                             .menuStyle(.borderlessButton)
                             .fixedSize()
-                            .accessibilityLabel("More actions for \(profile.name)")
+                            .accessibilityLabel(Text(verbatim: localization.localizer.format(
+                                "format.profile-more-actions",
+                                profile.name
+                            )))
                         }
                     }
                 }
             } header: {
-                Text("Saved Profiles")
+                Text("settings.profiles.saved-profiles")
             } footer: {
-                Text("A profile is a snapshot of every setting. Click a name to rename it. Switch here or from the menu bar.")
+                Text("settings.profiles.saved-profiles-help")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
                 if settings.appProfiles.isEmpty {
-                    Text("No app assignments")
+                    Text("settings.profiles.no-app-assignments")
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(sortedAssignments, id: \.self) { bundleID in
@@ -90,37 +101,43 @@ struct ProfilesView: View {
                     }
                 }
 
-                Menu("Assign App…") {
-                    Button("Choose from Applications…") { chooseFromApplications() }
+                Menu("settings.profiles.assign-app") {
+                    Button("settings.profiles.choose-applications") { chooseFromApplications() }
                     if !runningApps.isEmpty {
                         Divider()
                         ForEach(runningApps, id: \.bundleID) { app in
-                            Button(app.name) { assign(app.bundleID) }
+                            Button {
+                                assign(app.bundleID)
+                            } label: {
+                                Text(verbatim: app.name)
+                            }
                         }
                     }
                 }
                 .fixedSize()
                 .disabled(settings.profiles.isEmpty)
             } header: {
-                Text("Per-App Profiles")
+                Text("settings.profiles.per-app-profiles")
             } footer: {
-                Text(settings.profiles.isEmpty
-                     ? "Save a profile first, then assign it to apps."
-                     : "Entering an assigned app switches to its profile; leaving switches back.")
+                Text(verbatim: localization.localizer.string(
+                    settings.profiles.isEmpty
+                        ? "settings.profiles.per-app-empty-help"
+                        : "settings.profiles.per-app-help"
+                ))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("Import & Export") {
+            Section("settings.profiles.import-export") {
                 HStack {
-                    Button("Export Settings…") { exportSettings() }
-                    Button("Import Settings…") { importSettings() }
+                    Button("settings.profiles.export-settings") { exportSettings() }
+                    Button("settings.profiles.import-settings") { importSettings() }
                 }
-                Text("Settings travel as a JSON file. Share your setup or move it to another Mac.")
+                Text("settings.profiles.import-export-help")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let ioMessage {
-                    Text(ioMessage)
+                    Text(verbatim: ioMessage.localized(using: localization.localizer))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -154,7 +171,9 @@ struct ProfilesView: View {
         panel.allowedContentTypes = [.application]
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
-        panel.message = "Choose apps to give their own profile"
+        panel.title = localization.localizer.string("dialog.profiles.choose-apps.title")
+        panel.message = localization.localizer.string("dialog.profiles.choose-apps.message")
+        panel.prompt = localization.localizer.string("dialog.profiles.choose-apps.prompt")
         guard panel.runModal() == .OK else { return }
         for url in panel.urls {
             if let bundleID = Bundle(url: url)?.bundleIdentifier {
@@ -172,14 +191,16 @@ struct ProfilesView: View {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
         panel.nameFieldStringValue = "TactileSettings.json"
+        panel.title = localization.localizer.string("dialog.profiles.export.title")
+        panel.prompt = localization.localizer.string("dialog.profiles.export.prompt")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             try encoder.encode(settings.makeSnapshot()).write(to: url)
-            ioMessage = "Exported to \(url.lastPathComponent)."
+            ioMessage = .exported(fileName: url.lastPathComponent)
         } catch {
-            ioMessage = "Export failed: \(error.localizedDescription)"
+            ioMessage = .exportFailed(description: error.localizedDescription)
         }
     }
 
@@ -187,14 +208,46 @@ struct ProfilesView: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
+        panel.title = localization.localizer.string("dialog.profiles.import.title")
+        panel.message = localization.localizer.string("dialog.profiles.import.message")
+        panel.prompt = localization.localizer.string("dialog.profiles.import.prompt")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let data = try Data(contentsOf: url)
             let snapshot = try JSONDecoder().decode(SettingsSnapshot.self, from: data)
             settings.apply(snapshot)
-            ioMessage = "Imported \(url.lastPathComponent)."
+            ioMessage = .imported(fileName: url.lastPathComponent)
         } catch {
-            ioMessage = "Import failed: not a valid Tactile settings file."
+            ioMessage = .importFailed
+        }
+    }
+}
+
+private enum IOMessage {
+    case exported(fileName: String)
+    case exportFailed(description: String)
+    case imported(fileName: String)
+    case importFailed
+
+    func localized(using localizer: Localizer) -> String {
+        switch self {
+        case .exported(let fileName):
+            return localizer.format(
+                "format.profiles-exported",
+                fileName
+            )
+        case .exportFailed(let description):
+            return localizer.format(
+                "format.profiles-export-failed",
+                description
+            )
+        case .imported(let fileName):
+            return localizer.format(
+                "format.profiles-imported",
+                fileName
+            )
+        case .importFailed:
+            return localizer.string("error.profiles.invalid-settings-file")
         }
     }
 }
@@ -209,6 +262,7 @@ private func appName(_ bundleID: String) -> String {
 /// One app assignment: icon, name, profile picker, remove.
 private struct AppProfileRow: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
     let bundleID: String
 
     private var assigned: Binding<UUID?> {
@@ -228,12 +282,17 @@ private struct AppProfileRow: View {
                     .frame(width: 18, height: 18)
                     .accessibilityHidden(true)
             }
-            Text(appName(bundleID))
+            Text(verbatim: appName(bundleID))
             Spacer()
-            Picker("Profile for \(appName(bundleID))", selection: assigned) {
+            Picker(selection: assigned) {
                 ForEach(settings.profiles) { profile in
-                    Text(profile.name).tag(UUID?.some(profile.id))
+                    Text(verbatim: profile.name).tag(UUID?.some(profile.id))
                 }
+            } label: {
+                Text(verbatim: localization.localizer.format(
+                    "format.profile-for-app",
+                    appName(bundleID)
+                ))
             }
             .labelsHidden()
             .fixedSize()
@@ -243,7 +302,10 @@ private struct AppProfileRow: View {
                 Image(systemName: "minus.circle")
             }
             .buttonStyle(.borderless)
-            .accessibilityLabel("Remove assignment for \(appName(bundleID))")
+            .accessibilityLabel(Text(verbatim: localization.localizer.format(
+                "format.profile-remove-assignment",
+                appName(bundleID)
+            )))
         }
     }
 }

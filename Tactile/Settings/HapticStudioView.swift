@@ -9,6 +9,7 @@ import SwiftUI
 /// picker across the app, and each pulse's strength is set as a percentage.
 struct HapticStudioView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
 
     @State private var editing: CustomHaptic?
 
@@ -16,39 +17,54 @@ struct HapticStudioView: View {
         Form {
             Section {
                 if settings.customHaptics.isEmpty {
-                    Text("Nothing here yet. Compose your first haptic.")
+                    Text(verbatim: localization.localizer.string("settings.studio.empty"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(settings.customHaptics) { haptic in
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(haptic.name)
-                                Text("\(haptic.waveform.steps.count) pulse\(haptic.waveform.steps.count == 1 ? "" : "s") · \(Int(haptic.waveform.durationMs)) ms")
+                                Text(verbatim: haptic.name)
+                                Text(verbatim: localization.localizer.plural(
+                                    "waveform.pulse-count",
+                                    count: haptic.waveform.steps.count
+                                ) + " · " + localization.localizer.format(
+                                    "format.waveform.duration-ms",
+                                    arguments: [Int(haptic.waveform.durationMs)]
+                                ))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Button("Try") {
+                            Button(localization.localizer.string("settings.studio.try")) {
                                 HapticPreview.play(haptic.waveform, enhanced: settings.useEnhancedHaptics)
                             }
-                            Button("Edit") { editing = haptic }
+                            Button(localization.localizer.string("settings.studio.edit")) { editing = haptic }
                             Button {
                                 var copy = haptic
                                 copy.id = UUID()
-                                copy.name = haptic.name + " Copy"
+                                copy.name = localization.localizer.format(
+                                    "format.settings.studio.copied-name",
+                                    arguments: [haptic.name]
+                                )
                                 settings.customHaptics.append(copy)
                             } label: {
                                 Image(systemName: "plus.square.on.square")
                             }
                             .buttonStyle(.borderless)
-                            .accessibilityLabel("Duplicate \(haptic.name)")
+                            .accessibilityLabel(Text(verbatim: localization.localizer.format(
+                                "a11y.settings.studio.duplicate",
+                                arguments: [haptic.name]
+                            )))
                             Button {
                                 settings.customHaptics.removeAll { $0.id == haptic.id }
                             } label: {
                                 Image(systemName: "minus.circle")
                             }
                             .buttonStyle(.borderless)
-                            .accessibilityLabel("Delete \(haptic.name)")
+                            .accessibilityLabel(Text(verbatim: localization.localizer.format(
+                                "a11y.settings.studio.delete",
+                                arguments: [haptic.name]
+                            )))
                         }
                     }
                 }
@@ -59,12 +75,12 @@ struct HapticStudioView: View {
                         waveform: HapticWaveform(steps: [WaveformStep(strength: .generic, gapMs: 0, percent: 60)])
                     )
                 } label: {
-                    Label("New Haptic", systemImage: "plus")
+                    Label(localization.localizer.string("settings.studio.new-haptic"), systemImage: "plus")
                 }
             } header: {
-                Text("Saved haptics")
+                Text(verbatim: localization.localizer.string("settings.studio.saved-haptics"))
             } footer: {
-                Text("Anything saved here shows up in every waveform menu: elements, keyboard, danger, scrolling, all of them.")
+                Text(verbatim: localization.localizer.string("settings.studio.footer"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -82,6 +98,7 @@ struct HapticStudioView: View {
                 }
             )
             .environmentObject(settings)
+            .environmentObject(localization)
         }
     }
 }
@@ -92,21 +109,27 @@ private struct HapticComposer: View {
     var onSave: (CustomHaptic) -> Void
 
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(haptic.name.isEmpty ? "New Haptic" : haptic.name)
+            Text(verbatim: haptic.name.isEmpty
+                ? localization.localizer.string("settings.studio.new-haptic")
+                : haptic.name)
                 .font(.headline)
 
-            TextField("Name", text: $haptic.name)
+            TextField(localization.localizer.string("settings.studio.name"), text: $haptic.name)
                 .textFieldStyle(.roundedBorder)
 
             List {
                 ForEach($haptic.waveform.steps) { $step in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text("Pulse \(index(of: step.id) + 1)")
+                            Text(verbatim: localization.localizer.format(
+                                "format.waveform.pulse-number",
+                                arguments: [index(of: step.id) + 1]
+                            ))
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             Spacer()
@@ -117,23 +140,31 @@ private struct HapticComposer: View {
                             }
                             .buttonStyle(.borderless)
                             .disabled(haptic.waveform.steps.count <= 1)
-                            .accessibilityLabel("Remove pulse")
+                            .accessibilityLabel(Text(verbatim: localization.localizer.string(
+                                "a11y.waveform.remove-pulse"
+                            )))
                         }
                         HStack {
-                            Text("Strength")
+                            Text(verbatim: localization.localizer.string("waveform.strength"))
                                 .frame(width: 64, alignment: .leading)
                             Slider(value: percentBinding($step), in: 0...100, step: 1)
-                            Text("\(Int(step.percent ?? 60))%")
+                            Text(verbatim: localization.localizer.format(
+                                "format.waveform.percent",
+                                arguments: [Int(step.percent ?? 60)]
+                            ))
                                 .monospacedDigit()
                                 .foregroundStyle(.secondary)
                                 .frame(width: 44, alignment: .trailing)
                         }
                         if step.id != haptic.waveform.steps.last?.id {
                             HStack {
-                                Text("Pause")
+                                Text(verbatim: localization.localizer.string("waveform.pause"))
                                     .frame(width: 64, alignment: .leading)
                                 Slider(value: $step.gapMs, in: 10...500, step: 5)
-                                Text("\(Int(step.gapMs)) ms")
+                                Text(verbatim: localization.localizer.format(
+                                    "format.waveform.duration-ms",
+                                    arguments: [Int(step.gapMs)]
+                                ))
                                     .monospacedDigit()
                                     .foregroundStyle(.secondary)
                                     .frame(width: 44, alignment: .trailing)
@@ -145,7 +176,7 @@ private struct HapticComposer: View {
             }
             .frame(minHeight: 220)
 
-            Text("Strength plays at the nearest level your trackpad supports.")
+            Text(verbatim: localization.localizer.string("settings.studio.strength-note"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -156,21 +187,21 @@ private struct HapticComposer: View {
                     haptic.waveform.steps[haptic.waveform.steps.count - 1] = last
                     haptic.waveform.steps.append(WaveformStep(strength: .generic, gapMs: 0, percent: 60))
                 } label: {
-                    Label("Add Pulse", systemImage: "plus")
+                    Label(localization.localizer.string("waveform.add-pulse"), systemImage: "plus")
                 }
                 .disabled(haptic.waveform.steps.count >= 16)
 
                 Spacer()
 
-                Button("Play") {
+                Button(localization.localizer.string("waveform.play")) {
                     HapticPreview.play(haptic.waveform, enhanced: settings.useEnhancedHaptics)
                 }
 
-                Button("Cancel") { dismiss() }
+                Button(localization.localizer.string("dialog.cancel")) { dismiss() }
 
-                Button("Save") {
+                Button(localization.localizer.string("dialog.save")) {
                     if haptic.name.trimmingCharacters(in: .whitespaces).isEmpty {
-                        haptic.name = "My Haptic"
+                        haptic.name = localization.localizer.string("settings.studio.default-name")
                     }
                     onSave(haptic)
                     dismiss()

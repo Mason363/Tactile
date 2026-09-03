@@ -16,6 +16,7 @@ final class AppController: ObservableObject {
     static let shared = AppController()
 
     let settings: SettingsStore
+    let localization: LocalizationController
     let permission = PermissionManager()
 
     private let cursorMonitor = CursorMonitor()
@@ -49,8 +50,12 @@ final class AppController: ObservableObject {
 
     private init() {
         let settings = SettingsStore()
+        let localization = LocalizationController(settings: settings)
         self.settings = settings
-        self.feedback = FeedbackController(config: settings.makeConfig())
+        self.localization = localization
+        self.feedback = FeedbackController(
+            config: settings.makeConfig(languageIdentifier: localization.resolvedPack.identifier)
+        )
     }
 
     func bootstrap() {
@@ -118,6 +123,17 @@ final class AppController: ObservableObject {
             .sink { [weak self] _ in self?.settingsDidChange() }
             .store(in: &cancellables)
 
+        localization.$resolvedPack
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.pushConfig()
+                self.feedback.refreshLocalizedPresentation()
+            }
+            .store(in: &cancellables)
+
         permission.$isTrusted
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -174,7 +190,7 @@ final class AppController: ObservableObject {
     // MARK: - Pipeline
 
     private func pushConfig() {
-        feedback.config = settings.makeConfig()
+        feedback.config = settings.makeConfig(languageIdentifier: localization.resolvedPack.identifier)
         // Tell Coast whether Tactile owns the phone's hover feedback, so
         // Coast's own hover ticks stand down while we target the phone.
         PhoneHapticEngine.shared.setClaim(settings.hapticDevice == .iphone)
