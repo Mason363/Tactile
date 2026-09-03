@@ -27,6 +27,7 @@ struct OnboardingView: View {
             if !ActuatorHapticEngine.hasHapticTrackpad {
                 Label {
                     Text(verbatim: localization.localizer.string("onboarding.no-haptic-trackpad"))
+                        .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: "exclamationmark.triangle.fill")
                 }
@@ -39,6 +40,7 @@ struct OnboardingView: View {
 
             if permission.isTrusted {
                 Text(verbatim: localization.localizer.string("onboarding.trusted-description"))
+                    .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.center)
 
                 Button(localization.localizer.string("onboarding.done")) {
@@ -47,21 +49,25 @@ struct OnboardingView: View {
                 .keyboardShortcut(.defaultAction)
             } else {
                 Text(verbatim: localization.localizer.string("onboarding.introduction"))
+                    .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.center)
 
                 VStack(alignment: .leading, spacing: 10) {
                     Label {
                         Text(verbatim: localization.localizer.string("onboarding.permission-explanation"))
+                            .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: "accessibility")
                     }
                     Label {
                         Text(verbatim: localization.localizer.string("onboarding.privacy-explanation"))
+                            .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: "lock.shield")
                     }
                     Label {
                         Text(verbatim: localization.localizer.string("onboarding.revoke-explanation"))
+                            .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: "gearshape")
                     }
@@ -73,8 +79,11 @@ struct OnboardingView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(verbatim: localization.localizer.string("onboarding.step-1"))
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(verbatim: localization.localizer.string("onboarding.step-2"))
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(verbatim: localization.localizer.string("onboarding.step-3"))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -108,18 +117,26 @@ enum OnboardingWindow {
                 .environmentObject(controller.permission)
             let view = LocalizedRoot(localization: controller.localization, content: content)
             let hosting = NSHostingController(rootView: view)
+            // Own the window size instead of feeding SwiftUI's automatic
+            // min/max measurements back into the AppKit constraint pass.
+            hosting.sizingOptions = []
             let newWindow = NSWindow(contentViewController: hosting)
             newWindow.title = controller.localization.localizer.string("window.onboarding.title")
             newWindow.styleMask = [.titled, .closable]
             newWindow.isReleasedWhenClosed = false
+            resize(newWindow, toFit: hosting)
             newWindow.center()
             window = newWindow
             titleObservation = controller.localization.$resolvedPack
-                .sink { [weak newWindow, weak controller] pack in
-                    guard let controller else { return }
-                    newWindow?.title = Localizer(
+                .combineLatest(controller.permission.$isTrusted)
+                .dropFirst()
+                .receive(on: DispatchQueue.main)
+                .sink { [weak newWindow, weak controller, weak hosting] pack, _ in
+                    guard let controller, let newWindow, let hosting else { return }
+                    newWindow.title = Localizer(
                         pack: pack, fallback: controller.localization.registry.englishPack
                     ).string("window.onboarding.title")
+                    resize(newWindow, toFit: hosting)
                 }
         }
         NSApp.activate(ignoringOtherApps: true)
@@ -128,5 +145,13 @@ enum OnboardingWindow {
 
     static func close() {
         window?.close()
+    }
+
+    private static func resize<Content: View>(
+        _ window: NSWindow, toFit hosting: NSHostingController<Content>
+    ) {
+        let measured = hosting.sizeThatFits(in: CGSize(width: 440, height: 10_000))
+        guard measured.height.isFinite, measured.height > 0 else { return }
+        window.setContentSize(NSSize(width: 440, height: ceil(measured.height)))
     }
 }

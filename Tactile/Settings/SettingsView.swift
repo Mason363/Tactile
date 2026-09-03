@@ -192,14 +192,20 @@ enum SettingsWindow {
                 .environmentObject(controller.permission)
             let view = LocalizedRoot(localization: controller.localization, content: content)
             let hosting = NSHostingController(rootView: view)
+            // This manually managed window has an explicit fixed size. Letting
+            // NSHostingView repeatedly derive min/max sizes can create a
+            // constraint-update loop while localized text is being measured.
+            hosting.sizingOptions = []
             let newWindow = NSWindow(contentViewController: hosting)
             newWindow.title = controller.localization.localizer.string("window.settings.title")
             newWindow.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
             newWindow.titlebarAppearsTransparent = true
             newWindow.isReleasedWhenClosed = false
+            newWindow.setContentSize(NSSize(width: 780, height: 560))
             newWindow.center()
             window = newWindow
             titleObservation = controller.localization.$resolvedPack
+                .dropFirst()
                 .sink { [weak newWindow, weak controller] pack in
                     guard let controller else { return }
                     newWindow?.title = Localizer(
