@@ -8,6 +8,7 @@ TACTILE_PRODUCTS="$TACTILE_BUILD/DerivedData/Build/Products/Debug"
 TACTILE_TEST_OUTPUT=$(mktemp -d /private/tmp/tactile-localization-tests.XXXXXX)
 
 swift scripts/validate_localizations.swift
+swift scripts/validate_localizations.swift --self-test
 xcodebuild -quiet -project Tactile.xcodeproj -scheme Tactile \
   -configuration Debug -sdk macosx -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath "$TACTILE_BUILD/DerivedData" \

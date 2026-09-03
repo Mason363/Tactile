@@ -104,7 +104,14 @@ swift scripts/validate_localizations.swift
 bash scripts/test_localization.sh
 ```
 
-该脚本还直接编译生产 Localizer，分别验证源码资源和 App 内资源的复数、参数重排、逐键回退与语言包发现；随后链接真实 Debug 模块，验证语言状态、系统通知、已删除语言包的规范化、Profile JSON 和旧快捷键兼容性。测试使用独立的临时 Bundle 和 UserDefaults suite，不启动反馈管线，也不修改用户现有设置。所有构建和测试产物都在 `/private/tmp`。
+该脚本还直接编译生产 Localizer，分别验证源码资源和 App 内资源的复数、参数重排、逐键回退与语言包发现；随后链接真实 Debug 模块，验证语言状态、系统通知、已删除语言包的规范化、Profile JSON、旧快捷键兼容性，以及悬浮标签刷新不触发额外触觉反馈。测试使用独立的临时 Bundle 和 UserDefaults suite，不启动反馈管线，也不修改用户现有设置。所有构建和测试产物都在 `/private/tmp`。
+
+校验器自身的错误资源、Unicode 转义和格式参数测试可单独运行：
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+swift scripts/validate_localizations.swift --self-test
+```
 
 无签名 Debug 构建使用 Xcode 26.6 和临时构建目录：
 

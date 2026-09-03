@@ -60,6 +60,30 @@ struct LocalizationStateTests {
         expect(settings.languageSelection == .system, "System choice remains system")
         expect(controller.resolvedPack.identifier == registry.resolve(selection: .system,
                 systemIdentifier: Locale.preferredLanguages.first).identifier, "Only first system preference resolves")
-        print("PASS: \(checks) production state/profile/shortcut checks")
+
+        // A disabled control publishes a caption but cannot play feedback.
+        // Refreshing that retained context must not fire a waveform either.
+        var config = settings.makeConfig(languageIdentifier: "en")
+        config.feelDisabled = false
+        let feedback = FeedbackController(config: config, languagePacks: registry)
+        var caption: String?
+        var fireCount = 0
+        feedback.onHoverState = { _, _, value in caption = value }
+        feedback.onFire = { fireCount += 1 }
+        let hover = try JSONDecoder().decode(BridgeMessage.self, from:
+            Data(#"{"type":"hover","el":"button","enabled":false,"label":"Save"}"#.utf8))
+        feedback.handleBridge(hover)
+        expect(caption == "Save · Button", "English hover caption")
+        config.languageIdentifier = "zh-Hans"
+        feedback.config = config
+        feedback.refreshLocalizedPresentation()
+        expect(caption == "Save · 按钮", "Stationary hover caption immediately translates")
+        expect(fireCount == 0, "Language change does not trigger haptics")
+        var unlabeledHover = hover
+        unlabeledHover.label = nil
+        feedback.handleBridge(unlabeledHover)
+        expect(caption == "按钮", "Unlabeled hover uses category alone")
+        feedback.reset()
+        print("PASS: \(checks) production state/profile/shortcut/hover checks")
     }
 }

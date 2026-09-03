@@ -27,7 +27,7 @@ final class FeedbackController {
 
     /// Tells the visual hover indicator what the cursor is over (and where,
     /// in accessibility coordinates), plus a short caption naming it
-    /// ("Save - Button"). Only called when the hovered element changes.
+    /// ("Save - Button"). Also refreshed when the selected language changes.
     var onHoverState: ((HoverKind, CGRect?, String?) -> Void)?
 
     /// Fires with every haptic activation - drives the fire-flash visual
@@ -37,7 +37,7 @@ final class FeedbackController {
     private let haptics = SystemHapticEngine()
     private let audio = AudioFeedbackEngine()
     private let player = WaveformPlayer()
-    private let languagePacks = LanguagePackRegistry()
+    private let languagePacks: LanguagePackRegistry
     /// A separate player for keyboard ticks so typing never cancels an
     /// in-flight hover waveform (and vice versa).
     private let keyPlayer = WaveformPlayer()
@@ -106,8 +106,9 @@ final class FeedbackController {
 
     private let log = Logger(subsystem: "com.masonchen.Tactile", category: "feedback")
 
-    init(config: FeedbackConfig) {
+    init(config: FeedbackConfig, languagePacks: LanguagePackRegistry? = nil) {
         self.config = config
+        self.languagePacks = languagePacks ?? LanguagePackRegistry()
         ActuatorHapticEngine.shared?.target = config.hapticDevice
     }
 
