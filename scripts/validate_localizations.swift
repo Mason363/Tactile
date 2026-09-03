@@ -1371,6 +1371,11 @@ func runSelfTests(repositoryRoot: URL, report: inout ValidationReport) {
     } catch {
         report.fail("self-test: Unicode .strings fixture failed to parse: \(error)")
     }
+    let utf16Source = "\"utf16\" = \"value\";"
+    check(
+        decodeStringsSource(utf16Source.data(using: .utf16)!) == utf16Source,
+        "UTF-16 .strings data was not decoded"
+    )
 
     do {
         var parser = StringsParser(source: "\"broken\" = \"unterminated;\n")
