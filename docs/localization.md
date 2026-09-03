@@ -115,6 +115,8 @@ swift scripts/validate_localizations.swift --self-test
 
 无签名 Debug 构建使用 Xcode 26.6 和临时构建目录：
 
+无签名构建仅用于自动验证。如果要长期使用本地 App 并在重新构建后尽量保留辅助功能权限，请使用 [稳定本地签名构建](local-signing.md)：`bash scripts/build_local_signed.sh`。它会使用本机已有证书，不修改上游发布团队设置。
+
 ```bash
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 xcodebuild -project Tactile.xcodeproj \
