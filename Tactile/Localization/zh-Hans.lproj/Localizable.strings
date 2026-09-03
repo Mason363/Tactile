@@ -182,9 +182,9 @@
 "settings.apps.browser.extension-description" = "然后从 Chrome 网上应用店安装配套扩展。它让 Tactile 能够读取浏览器中原本无法识别的按钮。";
 "settings.apps.browser.get-extension" = "获取 Chrome 扩展";
 "settings.apps.browser.installed" = "已安装";
-"settings.apps.browser.messaging-host" = "消息主机";
+"settings.apps.browser.messaging-host" = "浏览器通信组件";
 "settings.apps.browser.not-set-up" = "尚未设置";
-"settings.apps.browser.setup-host" = "设置/重新安装主机";
+"settings.apps.browser.setup-host" = "安装/重新安装通信组件";
 "settings.apps.browser.title" = "浏览器集成";
 "settings.apps.browser.toggle" = "Chrome 浏览器集成";
 "settings.apps.excluded.add" = "添加应用…";
@@ -281,7 +281,7 @@
 "settings.pane.sound.subtitle" = "与触觉反馈同时播放的点击声。";
 "settings.pane.sound.title" = "声音";
 "settings.pane.studio.subtitle" = "编排并保存自己的触觉反馈。";
-"settings.pane.studio.title" = "触觉工作室";
+"settings.pane.studio.title" = "触觉编辑器";
 "settings.pane.vibration.subtitle" = "停留在元素上时持续振动。";
 "settings.pane.vibration.title" = "振动";
 "settings.pane.visual.subtitle" = "看见你所感受到的效果。";

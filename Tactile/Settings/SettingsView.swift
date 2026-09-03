@@ -435,12 +435,15 @@ private struct CategoryRow: View {
                 .frame(width: 20)
                 .accessibilityHidden(true)
 
-            Toggle(isOn: isEnabled) {
-                Text(verbatim: displayName)
-            }
-            .help(localization.localizer.string("feedback.category.\(category.rawValue).explanation"))
+            Text(verbatim: displayName)
+                .frame(minWidth: 130, maxWidth: .infinity, alignment: .leading)
+                .lineLimit(2)
 
-            Spacer()
+            Toggle("", isOn: isEnabled)
+                .labelsHidden()
+                .fixedSize()
+                .accessibilityLabel(Text(verbatim: displayName))
+                .help(localization.localizer.string("feedback.category.\(category.rawValue).explanation"))
 
             WaveformControl(waveform: waveform, accessibilityName: displayName)
                 .disabled(!isEnabled.wrappedValue)
