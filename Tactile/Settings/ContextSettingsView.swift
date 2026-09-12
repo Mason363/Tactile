@@ -76,10 +76,7 @@ struct ContextSettingsView: View {
                     range: 1...20,
                     step: 1,
                     format: { value in
-                        localization.localizer.format(
-                            "format.lines",
-                            Int(value)
-                        )
+                        localization.localizer.plural("format.lines", count: Int(value))
                     },
                     caption: nil
                 )

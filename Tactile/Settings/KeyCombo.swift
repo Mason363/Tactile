@@ -34,8 +34,8 @@ struct KeyCombo: Codable, Identifiable, Equatable {
         )
     }
 
-    /// Localized counterpart of `displayString`, used when recording a new
-    /// shortcut while retaining the raw key code and modifier values.
+    /// Localized counterpart of `displayString`, rebuilt in the current
+    /// language every time a shortcut is shown.
     static func localizedDisplayString(
         keyCode: UInt16,
         modifiers: NSEvent.ModifierFlags,
@@ -44,7 +44,9 @@ struct KeyCombo: Codable, Identifiable, Equatable {
         modifierSymbols(for: modifiers) + localizedKeyName(keyCode, using: localizer)
     }
 
-    /// "⌃⌥⇧⌘" + key name, in the standard macOS symbol order.
+    /// "⌃⌥⇧⌘" + key name, in the standard macOS symbol order. This is the
+    /// English form stored in `display`, unchanged from earlier versions so
+    /// shortcuts in shared profile JSON read the same in every version.
     static func displayString(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> String {
         modifierSymbols(for: modifiers) + keyName(keyCode)
     }
@@ -68,11 +70,9 @@ struct KeyCombo: Codable, Identifiable, Equatable {
     }
 
     static func keyName(_ keyCode: UInt16) -> String {
-        // Keep the legacy, non-localized API free of English fallback text.
-        // New UI should use `localizedDisplay(using:)` instead.
-        if keyCode == 49 { return "␠" }
+        if keyCode == 49 { return "Space" }
         if let special = specialSymbols[keyCode] { return special }
-        return keyboardLayoutKeyName(keyCode) ?? String(keyCode)
+        return keyboardLayoutKeyName(keyCode) ?? "Key \(keyCode)"
     }
 
     private static func localizedKeyName(_ keyCode: UInt16, using localizer: Localizer) -> String {

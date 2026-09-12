@@ -5,7 +5,7 @@
 "a11y.context.screen-edges" = "屏幕边缘";
 "a11y.context.scrolling" = "滚动";
 "a11y.context.window-boundaries" = "窗口边界";
-"a11y.menu-bar.permission-needed" = "需要辅助功能权限";
+"a11y.menu-bar.permission-needed" = "Tactile，需要辅助功能权限";
 "a11y.menu-bar.tactile" = "Tactile 菜单栏图标";
 "a11y.settings.about.made-by" = "由 Mason Chen 用心制作";
 /* %@ = the user-defined haptic name. */
@@ -88,8 +88,6 @@
 /* %1$@ = the user-provided element label; %2$@ = the translated element category. */
 "feedback.hover-caption.with-label" = "%1$@ · %2$@";
 
-/* %d = the number of scrolling lines. */
-"format.lines" = "%d 行";
 /* %d = an integer percentage from 0 to 100. */
 "format.percent.integer" = "%d%%";
 /* %@ = the existing user profile name. */
@@ -294,13 +292,13 @@
 "settings.performance.polling-rate" = "轮询频率";
 "settings.performance.polling-rate.explanation" = "移动时检查光标的频率。频率越高响应越及时，频率越低 CPU 占用略低。空闲时始终不会占用 CPU。";
 "settings.performance.rate-limit" = "两次触发之间的最短间隔";
-"settings.performance.rate-limit.explanation" = "触觉事件之间的最短时间间隔。设为“关闭”即可允许每个事件。";
+"settings.performance.rate-limit.explanation" = "如果扫过工具栏时触感过于密集，请调高此值。";
 
 "settings.playground.buttons.button" = "按钮";
-"settings.playground.buttons.delete" = "删除";
+"settings.playground.buttons.delete" = "删除（Delete）";
 "settings.playground.buttons.disabled" = "禁用";
 "settings.playground.buttons.link" = "链接";
-"settings.playground.buttons.note" = "“删除”会播放危险操作波形；只有开启“感受禁用控件”后，才能感受到“禁用”按钮。";
+"settings.playground.buttons.note" = "“删除（Delete）”会播放危险操作波形，危险检测目前只识别英文标签；只有开启“感受禁用控件”后，才能感受到“禁用”按钮。";
 "settings.playground.buttons.title" = "按钮";
 "settings.playground.other-elements.first" = "第一项";
 "settings.playground.other-elements.menu" = "弹出菜单";
@@ -390,7 +388,7 @@
 "settings.vibration.mode.heartbeat.name" = "心跳";
 "settings.vibration.mode.pulses.name" = "脉冲";
 "settings.vibration.mode.steady.name" = "持续";
-"settings.vibration.preview.active" = "松开以停止";
+"settings.vibration.preview.active" = "正在感受…";
 "settings.vibration.preview.hold" = "按住以感受振动";
 "settings.vibration.rhythm" = "节奏";
 "settings.vibration.speed" = "速度";

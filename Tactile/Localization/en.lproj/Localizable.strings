@@ -1,9 +1,9 @@
-"a11y.context.dangerous-elements" = "Dangerous element";
-"a11y.context.leaving-element" = "Leaving element";
-"a11y.context.screen-edges" = "Screen edge";
-"a11y.context.scrolling" = "Scrolling";
-"a11y.context.window-boundaries" = "Window boundary";
-"a11y.menu-bar.permission-needed" = "Accessibility permission required";
+"a11y.context.dangerous-elements" = "dangerous elements";
+"a11y.context.leaving-element" = "leaving an element";
+"a11y.context.screen-edges" = "screen edges";
+"a11y.context.scrolling" = "scrolling";
+"a11y.context.window-boundaries" = "window boundaries";
+"a11y.menu-bar.permission-needed" = "Tactile, accessibility access needed";
 "a11y.menu-bar.tactile" = "Tactile";
 "a11y.settings.about.made-by" = "Made with love by Mason Chen";
 // Dynamic format; printf signature: %@
@@ -15,18 +15,18 @@
 "a11y.sound-import-crop-end" = "Crop end";
 "a11y.sound-import-crop-start" = "Crop start";
 // Dynamic format; printf signature: %@
-"a11y.waveform.edit" = "Edit %@";
+"a11y.waveform.edit" = "Edit waveform for %@";
 // Dynamic format; printf signature: %@
 "a11y.waveform.for" = "Waveform for %@";
 "a11y.waveform.remove-pulse" = "Remove pulse";
 // Dynamic format; printf signature: %@
-"a11y.waveform.try" = "Try %@";
+"a11y.waveform.try" = "Try waveform for %@";
 "dialog.apps.choose-excluded.message" = "Choose apps to exclude from haptic feedback";
 "dialog.apps.choose-excluded.prompt" = "Choose";
 "dialog.apps.choose-excluded.title" = "Choose Applications to Exclude";
 "dialog.cancel" = "Cancel";
 "dialog.done" = "Done";
-"dialog.profiles.choose-apps.message" = "Select apps to give their own profile.";
+"dialog.profiles.choose-apps.message" = "Choose apps to give their own profile";
 "dialog.profiles.choose-apps.prompt" = "Choose";
 "dialog.profiles.choose-apps.title" = "Choose Applications for a Profile";
 "dialog.profiles.export.prompt" = "Export";
@@ -81,8 +81,6 @@
 "feedback.pattern.generic.name" = "Standard";
 "feedback.pattern.levelChange.name" = "Firm";
 // Dynamic format; printf signature: %d
-"format.lines" = "%d lines";
-// Dynamic format; printf signature: %d
 "format.percent.integer" = "%d%%";
 // Dynamic format; printf signature: %@
 "format.profile-copy-name" = "%@ Copy";
@@ -135,7 +133,7 @@
 // Dynamic format; printf signature: %d
 "format.waveform.pulse-number" = "Pulse %d";
 // Dynamic format; printf signature: %@
-"format.waveform.title" = "Waveform for %@";
+"format.waveform.title" = "Waveform: %@";
 "language.pack.display-name" = "English";
 "language.system" = "System";
 "menu.check-for-updates" = "Check for Updates…";
@@ -249,7 +247,7 @@
 "settings.pane.apps.title" = "Apps & Browser";
 "settings.pane.context.subtitle" = "Danger, state, hover-out, scrolling, and spatial feel.";
 "settings.pane.context.title" = "Context";
-"settings.pane.general.subtitle" = "Language, feedback, startup, and permissions.";
+"settings.pane.general.subtitle" = "Language, power, startup, and permission.";
 "settings.pane.general.title" = "General";
 "settings.pane.haptics.subtitle" = "Which elements you feel, and how.";
 "settings.pane.haptics.title" = "Haptics";
@@ -275,8 +273,8 @@
 "settings.performance.no-lag.explanation" = "Checks on every mouse event for the most instant feel. Uses more CPU while the mouse is moving.";
 "settings.performance.polling-rate" = "Polling rate";
 "settings.performance.polling-rate.explanation" = "How often the cursor is checked while moving. Higher feels more immediate; lower uses slightly less CPU. Idle cost is always zero.";
-"settings.performance.rate-limit" = "Rate limit";
-"settings.performance.rate-limit.explanation" = "Minimum time between haptic events. Set to Off to allow every event.";
+"settings.performance.rate-limit" = "Minimum time between taps";
+"settings.performance.rate-limit.explanation" = "Raise this if sweeping across toolbars feels too busy.";
 "settings.playground.buttons.button" = "Button";
 "settings.playground.buttons.delete" = "Delete";
 "settings.playground.buttons.disabled" = "Disabled";
@@ -365,8 +363,8 @@
 "settings.vibration.mode.heartbeat.name" = "Heartbeat";
 "settings.vibration.mode.pulses.name" = "Pulses";
 "settings.vibration.mode.steady.name" = "Steady";
-"settings.vibration.preview.active" = "Release to stop";
-"settings.vibration.preview.hold" = "Hold to feel the vibration";
+"settings.vibration.preview.active" = "Feeling it…";
+"settings.vibration.preview.hold" = "Hold to Feel";
 "settings.vibration.rhythm" = "Rhythm";
 "settings.vibration.speed" = "Speed";
 "settings.vibration.speed.enhanced-help" = "Past roughly 100 pulses per second the taps blur into one continuous vibration.";
