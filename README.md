@@ -87,6 +87,9 @@ per-element, so continuous use stays under a few percent of one core.
   login, one-click pause**: the usual knobs for taste and battery.
 - **Keyboard haptics**: tick on shortcuts, every key, modifiers, or your own
   recorded key combinations, each with its own waveform.
+- **Languages**: English and Simplified Chinese (简体中文). Tactile follows
+  your Mac's language list, or pick one in Settings → General. Adding a
+  language is a resource folder; see [`docs/localization.md`](docs/localization.md).
 - **Automatic updates**: via [Sparkle](https://sparkle-project.org).
 
 ## Accessibility
@@ -95,16 +98,16 @@ Tactile can also be used as a low-vision aid. Beyond the haptic feedback, it add
 visual reinforcement for anyone who has trouble tracking a small cursor or
 telling what's interactive on screen:
 
-- **Element highlighting** — an outline traces the exact control under the
+- **Element highlighting**: an outline traces the exact control under the
   cursor, so buttons, links, and fields are unambiguous even at a glance.
-- **Crosshair** — a large crosshair easier to keep track of pointer position on screen.
-- **Hover circle** — a colored circle rides under the cursor (green over
+- **Crosshair**: a large crosshair easier to keep track of pointer position on screen.
+- **Hover circle**: a colored circle rides under the cursor (green over
   clickable, red over destructive), reinforcing *what kind* of element you're
   on before you click.
-- **Labeled elements** - a small label that gives information on the hovered element, such as it's type (link, button, toggle, etc) and where it is from (menu bar, apps, dock, etc).
+- **Labeled elements**: a small label that gives information on the hovered element, such as its type (link, button, toggle, etc) and where it is from (menu bar, apps, dock, etc).
 
 Together with the haptic tick, this gives low-vision users three independent
-signals — feel, color, and shape — for the same event.
+signals (feel, color, and shape) for the same event.
 
 ### Crosshair
 https://github.com/user-attachments/assets/39e714b6-001d-41fa-ad16-dd00278f0ac2
