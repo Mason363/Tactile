@@ -35,7 +35,9 @@ struct MenuBarView: View {
             } label: {
                 Text(verbatim: localization.localizer.format(
                     "menu.resume-paused-until",
-                    until.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(localization.locale))
+                    // The user's own clock (region and 24-hour setting), not
+                    // the language pack's region-less locale.
+                    until.formatted(date: .omitted, time: .shortened)
                 ))
             }
         } else {

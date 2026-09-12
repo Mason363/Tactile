@@ -472,7 +472,9 @@ final class FeedbackController {
     /// Forgets the current element so re-entering it ticks again.
     func reset() {
         log.debug("reset")
-        publishNoHover()
+        // Drop the retained caption without redrawing: reset() also runs while
+        // the pipeline is stopped, and redrawing would re-show hidden aids.
+        hoverPresentation = nil
         lastElement = nil
         lastWindow = nil
         firedForCurrentElement = false
@@ -525,7 +527,7 @@ final class FeedbackController {
     /// Re-emits only the visual label. It intentionally does not touch any
     /// haptic, dwell, rate-limit, or element identity state.
     func refreshLocalizedPresentation() {
-        guard let hoverPresentation else { return }
+        guard let hoverPresentation, config.hoverCaptionEnabled else { return }
         onHoverState?(
             hoverPresentation.kind,
             hoverPresentation.frame,
@@ -540,7 +542,10 @@ final class FeedbackController {
 
     private func publishHover(kind: HoverKind, frame: CGRect?, category: FeedbackCategory, label: String?) {
         hoverPresentation = HoverPresentation(kind: kind, frame: frame, category: category, label: label)
-        onHoverState?(kind, frame, caption(category: category, label: label))
+        // A caption costs localized lookups on the way to the tick; only
+        // build it when the caption aid will show it.
+        let text = config.hoverCaptionEnabled ? caption(category: category, label: label) : nil
+        onHoverState?(kind, frame, text)
     }
 
     /// "Save · Button", or just "Button" when the element has no usable name.
@@ -548,7 +553,7 @@ final class FeedbackController {
         let fallback = languagePacks.englishPack
         let selected = languagePacks.pack(identifier: config.languageIdentifier) ?? fallback
         let localizer = Localizer(pack: selected, fallback: fallback)
-        let categoryName = localizer.string("feedback.category.\(category.rawValue).caption")
+        let categoryName = category.localizedCaption(using: localizer)
         let name = (label ?? "").replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else {

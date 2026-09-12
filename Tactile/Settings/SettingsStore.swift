@@ -128,6 +128,8 @@ enum HapticDeviceTarget: String, CaseIterable, Identifiable {
 /// background pipeline, so the pipeline never touches UserDefaults.
 struct FeedbackConfig {
     var languageIdentifier: String
+    /// Captions are only built while the caption aid can show them.
+    var hoverCaptionEnabled: Bool
     var enabledCategories: Set<FeedbackCategory>
     var waveforms: [FeedbackCategory: HapticWaveform]
     var excludedBundleIDs: Set<String>
@@ -624,6 +626,7 @@ final class SettingsStore: ObservableObject {
     func makeConfig(languageIdentifier: String) -> FeedbackConfig {
         FeedbackConfig(
             languageIdentifier: languageIdentifier,
+            hoverCaptionEnabled: hoverCaptionEnabled,
             enabledCategories: Set(categoryEnabled.filter(\.value).keys),
             waveforms: categoryWaveforms,
             excludedBundleIDs: Set(excludedBundleIDs),

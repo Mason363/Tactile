@@ -192,16 +192,13 @@ enum SettingsWindow {
                 .environmentObject(controller.permission)
             let view = LocalizedRoot(localization: controller.localization, content: content)
             let hosting = NSHostingController(rootView: view)
-            // This manually managed window has an explicit fixed size. Letting
-            // NSHostingView repeatedly derive min/max sizes can create a
-            // constraint-update loop while localized text is being measured.
-            hosting.sizingOptions = []
+            // The root view's fixed frame sizes the window, titlebar safe
+            // area included. Forcing a content size would clip every pane.
             let newWindow = NSWindow(contentViewController: hosting)
             newWindow.title = controller.localization.localizer.string("window.settings.title")
             newWindow.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
             newWindow.titlebarAppearsTransparent = true
             newWindow.isReleasedWhenClosed = false
-            newWindow.setContentSize(NSSize(width: 780, height: 560))
             newWindow.center()
             window = newWindow
             titleObservation = controller.localization.$resolvedPack
@@ -324,7 +321,7 @@ struct GeneralSettingsView: View {
                 arguments: [name]
             )
         }
-        return localization.localizer.string("settings.general.device.\(target.rawValue).name")
+        return target.localizedName(using: localization.localizer)
     }
 
     /// Re-scans the connected devices; the picker exists only while there
@@ -428,7 +425,7 @@ private struct CategoryRow: View {
     }
 
     var body: some View {
-        let displayName = localization.localizer.string("feedback.category.\(category.rawValue).name")
+        let displayName = category.localizedName(using: localization.localizer)
         HStack(spacing: 10) {
             Image(systemName: category.symbol)
                 .foregroundStyle(isEnabled.wrappedValue ? Color.accentColor : Color.secondary)
@@ -443,7 +440,7 @@ private struct CategoryRow: View {
                 .labelsHidden()
                 .fixedSize()
                 .accessibilityLabel(Text(verbatim: displayName))
-                .help(localization.localizer.string("feedback.category.\(category.rawValue).explanation"))
+                .help(category.localizedExplanation(using: localization.localizer))
 
             WaveformControl(waveform: waveform, accessibilityName: displayName)
                 .disabled(!isEnabled.wrappedValue)
@@ -531,14 +528,14 @@ struct VibrationSettingsView: View {
             Section {
                 Picker(localization.localizer.string("settings.vibration.rhythm"), selection: $settings.vibrationMode) {
                     ForEach(VibrationMode.allCases) { mode in
-                        Text(verbatim: localization.localizer.string("settings.vibration.mode.\(mode.rawValue).name"))
+                        Text(verbatim: mode.localizedName(using: localization.localizer)).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
 
                 Picker(localization.localizer.string("settings.vibration.strength"), selection: $settings.vibratePattern) {
                     ForEach(FeedbackPattern.allCases) { pattern in
-                        Text(verbatim: localization.localizer.string("feedback.pattern.\(pattern.rawValue).name"))
+                        Text(verbatim: pattern.localizedName(using: localization.localizer)).tag(pattern)
                     }
                 }
 

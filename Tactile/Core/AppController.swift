@@ -54,7 +54,8 @@ final class AppController: ObservableObject {
         self.settings = settings
         self.localization = localization
         self.feedback = FeedbackController(
-            config: settings.makeConfig(languageIdentifier: localization.resolvedPack.identifier)
+            config: settings.makeConfig(languageIdentifier: localization.resolvedPack.identifier),
+            languagePacks: localization.registry
         )
     }
 
@@ -130,7 +131,8 @@ final class AppController: ObservableObject {
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.pushConfig()
-                self.feedback.refreshLocalizedPresentation()
+                // Only a running pipeline has a caption on screen to translate.
+                if self.isActive { self.feedback.refreshLocalizedPresentation() }
             }
             .store(in: &cancellables)
 
