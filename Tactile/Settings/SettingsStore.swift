@@ -23,50 +23,25 @@ enum FeedbackCategory: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var displayName: String {
-        switch self {
-        case .button: return "Buttons"
-        case .link: return "Links"
-        case .toggle: return "Checkboxes & Switches"
-        case .menuItem: return "Menus & Pop-ups"
-        case .menuBarItem: return "Menu Bar"
-        case .dockItem: return "Dock"
-        case .tab: return "Tabs"
-        case .slider: return "Sliders"
-        case .textField: return "Text Fields"
-        case .genericPressable: return "Other Clickable Elements"
-        }
+    /// Stable resource key for the plural category name used by settings.
+    var nameLocalizationKey: String { "feedback.category.\(rawValue).name" }
+
+    /// Stable resource key for the singular hover-caption category name.
+    var captionLocalizationKey: String { "feedback.category.\(rawValue).caption" }
+
+    /// Stable resource key for the explanatory help text.
+    var explanationLocalizationKey: String { "feedback.category.\(rawValue).explanation" }
+
+    func localizedName(using localizer: Localizer) -> String {
+        localizer.string(nameLocalizationKey)
     }
 
-    /// Singular, for the element caption visual aid ("Save - Button").
-    var captionName: String {
-        switch self {
-        case .button: return "Button"
-        case .link: return "Link"
-        case .toggle: return "Toggle"
-        case .menuItem: return "Menu"
-        case .menuBarItem: return "Menu bar"
-        case .dockItem: return "Dock"
-        case .tab: return "Tab"
-        case .slider: return "Slider"
-        case .textField: return "Text field"
-        case .genericPressable: return "Clickable"
-        }
+    func localizedCaption(using localizer: Localizer) -> String {
+        localizer.string(captionLocalizationKey)
     }
 
-    var explanation: String {
-        switch self {
-        case .button: return "Push buttons, toolbar buttons, and window controls."
-        case .link: return "Hyperlinks in web pages and apps."
-        case .toggle: return "Checkboxes, radio buttons, switches, and disclosure triangles."
-        case .menuItem: return "Items inside open menus, plus pop-up and combo buttons."
-        case .menuBarItem: return "The menu bar: Apple menu, app menus, and status icons."
-        case .dockItem: return "Dock icons: apps, minimized windows, folders, and the Trash."
-        case .tab: return "Tab controls in windows and web pages."
-        case .slider: return "Sliders and steppers."
-        case .textField: return "Editable text fields and search fields."
-        case .genericPressable: return "Custom pressable controls, common in web and Electron apps."
-        }
+    func localizedExplanation(using localizer: Localizer) -> String {
+        localizer.string(explanationLocalizationKey)
     }
 
     var defaultEnabled: Bool {
@@ -91,13 +66,12 @@ enum FeedbackPattern: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
-    var displayName: String {
-        switch self {
-        case .generic: return "Standard"
-        case .alignment: return "Light"
-        case .levelChange: return "Firm"
-        }
+    var nameLocalizationKey: String { "feedback.pattern.\(rawValue).name" }
+
+    func localizedName(using localizer: Localizer) -> String {
+        localizer.string(nameLocalizationKey)
     }
+
 }
 
 /// Temporal shape of the hover vibration.
@@ -108,12 +82,10 @@ enum VibrationMode: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var displayName: String {
-        switch self {
-        case .steady: return "Steady"
-        case .pulses: return "Pulses"
-        case .heartbeat: return "Heartbeat"
-        }
+    var nameLocalizationKey: String { "settings.vibration.mode.\(rawValue).name" }
+
+    func localizedName(using localizer: Localizer) -> String {
+        localizer.string(nameLocalizationKey)
     }
 
     /// Gaps between consecutive buzz ticks, cycled in order.
@@ -141,13 +113,10 @@ enum HapticDeviceTarget: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var displayName: String {
-        switch self {
-        case .all: return "All trackpads"
-        case .builtIn: return "Built-in trackpad"
-        case .external: return "Magic Trackpad"
-        case .iphone: return "iPhone (Coast)"
-        }
+    var nameLocalizationKey: String { "settings.general.device.\(rawValue).name" }
+
+    func localizedName(using localizer: Localizer) -> String {
+        localizer.string(nameLocalizationKey)
     }
 
     /// A single-trackpad choice: the routing that needs the actuator.
@@ -158,6 +127,9 @@ enum HapticDeviceTarget: String, CaseIterable, Identifiable {
 /// Rebuilt on the main thread whenever settings change and handed to the
 /// background pipeline, so the pipeline never touches UserDefaults.
 struct FeedbackConfig {
+    var languageIdentifier: String
+    /// Captions are only built while the caption aid can show them.
+    var hoverCaptionEnabled: Bool
     var enabledCategories: Set<FeedbackCategory>
     var waveforms: [FeedbackCategory: HapticWaveform]
     var excludedBundleIDs: Set<String>
@@ -271,7 +243,13 @@ struct SettingsProfile: Codable, Identifiable {
 
 @MainActor
 final class SettingsStore: ObservableObject {
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
+
+    /// The UI language is deliberately global rather than profile-scoped.
+    /// Persist only the stable `system` / `pack:<identifier>` representation.
+    @Published var languageSelection: LanguageSelection {
+        didSet { defaults.set(languageSelection.storageValue, forKey: "languageSelection") }
+    }
 
     @Published var isEnabled: Bool {
         didSet { defaults.set(isEnabled, forKey: "isEnabled") }
@@ -555,7 +533,11 @@ final class SettingsStore: ObservableObject {
         didSet { setCodable(profiles, forKey: "profiles") }
     }
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        languageSelection = LanguageSelection(
+            storageValue: defaults.string(forKey: "languageSelection") ?? "system"
+        )
         isEnabled = defaults.object(forKey: "isEnabled") as? Bool ?? true
 
         var enabled: [FeedbackCategory: Bool] = [:]
@@ -641,8 +623,10 @@ final class SettingsStore: ObservableObject {
         profiles = Self.codable(defaults, "profiles") ?? []
     }
 
-    func makeConfig() -> FeedbackConfig {
+    func makeConfig(languageIdentifier: String) -> FeedbackConfig {
         FeedbackConfig(
+            languageIdentifier: languageIdentifier,
+            hoverCaptionEnabled: hoverCaptionEnabled,
             enabledCategories: Set(categoryEnabled.filter(\.value).keys),
             waveforms: categoryWaveforms,
             excludedBundleIDs: Set(excludedBundleIDs),

@@ -9,6 +9,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import Combine
 
 // MARK: - Panes
 
@@ -29,40 +30,15 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
-        switch self {
-        case .general: return "General"
-        case .haptics: return "Haptics"
-        case .vibration: return "Vibration"
-        case .keyboard: return "Keyboard"
-        case .studio: return "Haptic Studio"
-        case .context: return "Context"
-        case .visual: return "Visual Aids"
-        case .sound: return "Sound"
-        case .performance: return "Performance"
-        case .apps: return "Apps & Browser"
-        case .profiles: return "Profiles"
-        case .playground: return "Playground"
-        case .about: return "About"
-        }
+    var titleKey: String { "settings.pane.\(rawValue).title" }
+    var subtitleKey: String { "settings.pane.\(rawValue).subtitle" }
+
+    func localizedTitle(using localizer: Localizer) -> String {
+        localizer.string(titleKey)
     }
 
-    var subtitle: String {
-        switch self {
-        case .general: return "Power, startup, and permission."
-        case .haptics: return "Which elements you feel, and how."
-        case .vibration: return "A continuous buzz while resting on an element."
-        case .keyboard: return "Feel keys and shortcuts as you type."
-        case .studio: return "Compose and save your own haptics."
-        case .context: return "Danger, state, hover-out, scrolling, and spatial feel."
-        case .visual: return "See what you feel."
-        case .sound: return "An audible click alongside the haptics."
-        case .performance: return "Responsiveness and resource trade-offs."
-        case .apps: return "Where Tactile stays quiet, and the Chrome integration."
-        case .profiles: return "Save, switch, and share complete setups."
-        case .playground: return "Real controls to try your setup on."
-        case .about: return "Version, updates, feedback, and credits."
-        }
+    func localizedSubtitle(using localizer: Localizer) -> String {
+        localizer.string(subtitleKey)
     }
 
     var symbol: String {
@@ -105,12 +81,13 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 // MARK: - Root
 
 struct SettingsView: View {
+    @EnvironmentObject private var localization: LocalizationController
     @State private var pane: SettingsPane = .general
 
     var body: some View {
         NavigationSplitView {
             List(selection: $pane) {
-                Section("Feedback") {
+                Section(localization.localizer.string("settings.sidebar.feedback")) {
                     sidebarRow(.general)
                     sidebarRow(.haptics)
                     sidebarRow(.vibration)
@@ -120,12 +97,12 @@ struct SettingsView: View {
                     sidebarRow(.visual)
                     sidebarRow(.sound)
                 }
-                Section("System") {
+                Section(localization.localizer.string("settings.sidebar.system")) {
                     sidebarRow(.performance)
                     sidebarRow(.apps)
                     sidebarRow(.profiles)
                 }
-                Section("Try It") {
+                Section(localization.localizer.string("settings.sidebar.try-it")) {
                     sidebarRow(.playground)
                 }
                 Section {
@@ -138,14 +115,14 @@ struct SettingsView: View {
                 PaneHeader(pane: pane)
                 detailView
             }
-            .navigationTitle(pane.title)
+            .navigationTitle(pane.localizedTitle(using: localization.localizer))
         }
         .frame(width: 780, height: 560)
     }
 
     private func sidebarRow(_ pane: SettingsPane) -> some View {
         Label {
-            Text(pane.title)
+            Text(verbatim: pane.localizedTitle(using: localization.localizer))
         } icon: {
             Image(systemName: pane.symbol)
                 .font(.system(size: 11, weight: .semibold))
@@ -179,13 +156,14 @@ struct SettingsView: View {
 /// Title + one-line description at the top of every pane, so each page
 /// explains itself once instead of every control carrying a paragraph.
 private struct PaneHeader: View {
+    @EnvironmentObject private var localization: LocalizationController
     let pane: SettingsPane
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(pane.title)
+            Text(verbatim: pane.localizedTitle(using: localization.localizer))
                 .font(.title2.bold())
-            Text(pane.subtitle)
+            Text(verbatim: pane.localizedSubtitle(using: localization.localizer))
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -204,21 +182,33 @@ private struct PaneHeader: View {
 @MainActor
 enum SettingsWindow {
     private static var window: NSWindow?
+    private static var titleObservation: AnyCancellable?
 
     static func show(controller: AppController) {
         if window == nil {
-            let view = SettingsView()
+            let content = SettingsView()
                 .environmentObject(controller)
                 .environmentObject(controller.settings)
                 .environmentObject(controller.permission)
+            let view = LocalizedRoot(localization: controller.localization, content: content)
             let hosting = NSHostingController(rootView: view)
+            // The root view's fixed frame sizes the window, titlebar safe
+            // area included. Forcing a content size would clip every pane.
             let newWindow = NSWindow(contentViewController: hosting)
-            newWindow.title = "Tactile Settings"
+            newWindow.title = controller.localization.localizer.string("window.settings.title")
             newWindow.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
             newWindow.titlebarAppearsTransparent = true
             newWindow.isReleasedWhenClosed = false
             newWindow.center()
             window = newWindow
+            titleObservation = controller.localization.$resolvedPack
+                .dropFirst()
+                .sink { [weak newWindow, weak controller] pack in
+                    guard let controller else { return }
+                    newWindow?.title = Localizer(
+                        pack: pack, fallback: controller.localization.registry.englishPack
+                    ).string("window.settings.title")
+                }
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
@@ -231,6 +221,7 @@ struct GeneralSettingsView: View {
     @EnvironmentObject private var controller: AppController
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var permission: PermissionManager
+    @EnvironmentObject private var localization: LocalizationController
 
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginItemError: String?
@@ -242,9 +233,20 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         Form {
+            Section(localization.localizer.string("settings.general.language.section")) {
+                Picker(localization.localizer.string("settings.general.language.picker"), selection: $settings.languageSelection) {
+                    Text(verbatim: localization.localizer.string("language.system"))
+                        .tag(LanguageSelection.system)
+                    ForEach(localization.registry.packs) { pack in
+                        Text(verbatim: pack.nativeDisplayName)
+                            .tag(LanguageSelection.pack(identifier: pack.identifier))
+                    }
+                }
+            }
+
             Section {
-                Toggle("Enable haptic feedback", isOn: $settings.isEnabled)
-                Toggle("Launch Tactile at login", isOn: $launchAtLogin)
+                Toggle(localization.localizer.string("settings.general.enable-feedback"), isOn: $settings.isEnabled)
+                Toggle(localization.localizer.string("settings.general.launch-at-login"), isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, newValue in
                         do {
                             try LoginItem.set(newValue)
@@ -255,17 +257,17 @@ struct GeneralSettingsView: View {
                         }
                     }
                 if let loginItemError {
-                    Text(loginItemError)
+                    Text(verbatim: loginItemError)
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
             }
 
             if deviceTargets.count > 1 {
-                Section("Devices") {
-                    Picker("Feel haptics on", selection: $settings.hapticDevice) {
+                Section(localization.localizer.string("settings.general.devices.section")) {
+                    Picker(localization.localizer.string("settings.general.devices.picker"), selection: $settings.hapticDevice) {
                         ForEach(deviceTargets) { target in
-                            Text(label(for: target)).tag(target)
+                            Text(verbatim: label(for: target)).tag(target)
                         }
                     }
                     .onChange(of: settings.hapticDevice) { _, newValue in
@@ -278,26 +280,28 @@ struct GeneralSettingsView: View {
                         engine.target = newValue
                         engine.tick(.generic)
                     }
-                    Text(phone.isAvailable
-                         ? "An iPhone running Coast can feel the ticks in your hand instead of under your finger. If the chosen device disconnects, feedback returns to the trackpads."
-                         : "Several haptic trackpads are connected. Choose which one ticks; if it disconnects, feedback returns to all of them.")
+                    Text(verbatim: localization.localizer.string(
+                        phone.isAvailable
+                            ? "settings.general.devices.coast-help"
+                            : "settings.general.devices.trackpads-help"
+                    ))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section("Permission") {
+            Section(localization.localizer.string("settings.general.permission.section")) {
                 if permission.isTrusted {
-                    Label("Accessibility access granted", systemImage: "checkmark.circle.fill")
+                    Label(localization.localizer.string("settings.general.permission.granted"), systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
                 } else {
-                    Label("Accessibility access is required", systemImage: "exclamationmark.triangle.fill")
+                    Label(localization.localizer.string("settings.general.permission.required"), systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
-                    Button("Open Accessibility Settings") {
+                    Button(localization.localizer.string("settings.general.permission.open-settings")) {
                         permission.openSystemSettings()
                     }
                 }
-                Text("Tactile reads the element under your cursor through macOS accessibility. It never sees keystrokes or screen contents.")
+                Text(verbatim: localization.localizer.string("settings.general.permission.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -312,9 +316,12 @@ struct GeneralSettingsView: View {
     /// its fixed label.
     private func label(for target: HapticDeviceTarget) -> String {
         if target == .iphone, let name = phone.phoneName {
-            return "\(name) (Coast)"
+            return localization.localizer.format(
+                "format.settings.general.device.coast",
+                arguments: [name]
+            )
         }
-        return target.displayName
+        return target.localizedName(using: localization.localizer)
     }
 
     /// Re-scans the connected devices; the picker exists only while there
@@ -346,17 +353,18 @@ struct GeneralSettingsView: View {
 
 struct HapticsSettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
 
     var body: some View {
         Form {
             Section {
-                Toggle("Enhanced haptics", isOn: $settings.useEnhancedHaptics)
+                Toggle(localization.localizer.string("settings.haptics.enhanced"), isOn: $settings.useEnhancedHaptics)
                 if ActuatorHapticEngine.shared == nil {
-                    Label("Not available on this Mac. Standard haptics are used.", systemImage: "exclamationmark.triangle")
+                    Label(localization.localizer.string("settings.haptics.enhanced.unavailable"), systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(.orange)
                 } else {
-                    Text("Makes Light, Standard, and Firm physically different strengths and unlocks true continuous vibration.")
+                    Text(verbatim: localization.localizer.string("settings.haptics.enhanced.explanation"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -367,21 +375,21 @@ struct HapticsSettingsView: View {
                     CategoryRow(category: category)
                 }
             } header: {
-                Text("Elements")
+                Text(verbatim: localization.localizer.string("settings.haptics.elements.section"))
             } footer: {
-                Text("Each element type has its own waveform. Try plays it, Edit composes your own.")
+                Text(verbatim: localization.localizer.string("settings.haptics.elements.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("Quiet Modes") {
-                Toggle("Simple mode", isOn: $settings.simpleMode)
-                Text("Only primary targets tick: result links and prominent labeled buttons. Icon-only controls stay silent.")
+            Section(localization.localizer.string("settings.haptics.quiet-modes.section")) {
+                Toggle(localization.localizer.string("settings.haptics.simple-mode"), isOn: $settings.simpleMode)
+                Text(verbatim: localization.localizer.string("settings.haptics.simple-mode.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Toggle("Only buttons in the focused window", isOn: $settings.focusedWindowButtonsOnly)
-                Text("Overrides the choices above while on.")
+                Toggle(localization.localizer.string("settings.haptics.focused-window-only"), isOn: $settings.focusedWindowButtonsOnly)
+                Text(verbatim: localization.localizer.string("settings.haptics.focused-window-only.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -392,6 +400,7 @@ struct HapticsSettingsView: View {
 
 private struct CategoryRow: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
     let category: FeedbackCategory
 
     private var isEnabled: Binding<Bool> {
@@ -416,23 +425,27 @@ private struct CategoryRow: View {
     }
 
     var body: some View {
+        let displayName = category.localizedName(using: localization.localizer)
         HStack(spacing: 10) {
             Image(systemName: category.symbol)
                 .foregroundStyle(isEnabled.wrappedValue ? Color.accentColor : Color.secondary)
                 .frame(width: 20)
                 .accessibilityHidden(true)
 
-            Toggle(isOn: isEnabled) {
-                Text(category.displayName)
-            }
-            .help(category.explanation)
+            Text(verbatim: displayName)
+                .frame(minWidth: 130, maxWidth: .infinity, alignment: .leading)
+                .lineLimit(2)
 
-            Spacer()
+            Toggle("", isOn: isEnabled)
+                .labelsHidden()
+                .fixedSize()
+                .accessibilityLabel(Text(verbatim: displayName))
+                .help(category.localizedExplanation(using: localization.localizer))
 
-            WaveformControl(waveform: waveform, accessibilityName: category.displayName)
+            WaveformControl(waveform: waveform, accessibilityName: displayName)
                 .disabled(!isEnabled.wrappedValue)
 
-            SoundPicker(selection: sound, accessibilityName: category.displayName)
+            SoundPicker(selection: sound, accessibilityName: displayName)
                 .disabled(!isEnabled.wrappedValue)
         }
         .padding(.vertical, 1)
@@ -442,31 +455,41 @@ private struct CategoryRow: View {
 /// Sound assignment menu used beside every waveform picker. "Default"
 /// follows the Sound pane; "None" is silent; a specific sound always plays.
 struct SoundPicker: View {
+    @EnvironmentObject private var localization: LocalizationController
     @Binding var selection: String
     var accessibilityName: String
 
     var body: some View {
-        Picker("Sound for \(accessibilityName)", selection: $selection) {
-            Text("Default").tag("default")
-            Text("None").tag("none")
+        Picker(selection: $selection) {
+            Text(verbatim: localization.localizer.string("settings.sound.assignment.default")).tag("default")
+            Text(verbatim: localization.localizer.string("settings.sound.assignment.none")).tag("none")
             Divider()
             ForEach(AudioFeedbackEngine.synthSounds, id: \.self) { identifier in
-                Text(AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
+                Text(verbatim: localizedSoundName(identifier)).tag(identifier)
             }
             Divider()
             ForEach(AudioFeedbackEngine.availableSounds, id: \.self) { name in
-                Text(name).tag(name)
+                Text(verbatim: name).tag(name)
             }
             let custom = AudioFeedbackEngine.customSounds()
             if !custom.isEmpty {
                 Divider()
                 ForEach(custom, id: \.self) { identifier in
-                    Text(AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
+                    Text(verbatim: AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
                 }
             }
+        } label: {
+            Text(verbatim: localization.localizer.format(
+                "format.settings.sound.for-element",
+                arguments: [accessibilityName]
+            ))
         }
         .labelsHidden()
         .fixedSize()
+    }
+
+    private func localizedSoundName(_ identifier: String) -> String {
+        AudioFeedbackEngine.localizedDisplayName(for: identifier, using: localization.localizer)
     }
 }
 
@@ -491,39 +514,45 @@ private extension FeedbackCategory {
 
 struct VibrationSettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
 
     var body: some View {
         Form {
             Section {
-                Toggle("Vibrate while hovering", isOn: $settings.vibrateOnHover)
-                Text("Buzzes for as long as the cursor rests on a clickable element. Uses a little CPU and battery while buzzing.")
+                Toggle(localization.localizer.string("settings.vibration.enable"), isOn: $settings.vibrateOnHover)
+                Text(verbatim: localization.localizer.string("settings.vibration.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
-                Picker("Rhythm", selection: $settings.vibrationMode) {
+                Picker(localization.localizer.string("settings.vibration.rhythm"), selection: $settings.vibrationMode) {
                     ForEach(VibrationMode.allCases) { mode in
-                        Text(mode.displayName).tag(mode)
+                        Text(verbatim: mode.localizedName(using: localization.localizer)).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
 
-                Picker("Strength", selection: $settings.vibratePattern) {
+                Picker(localization.localizer.string("settings.vibration.strength"), selection: $settings.vibratePattern) {
                     ForEach(FeedbackPattern.allCases) { pattern in
-                        Text(pattern.displayName).tag(pattern)
+                        Text(verbatim: pattern.localizedName(using: localization.localizer)).tag(pattern)
                     }
                 }
 
                 LabeledSlider(
-                    title: "Speed",
+                    title: localization.localizer.string("settings.vibration.speed"),
                     value: $settings.vibrateRateMs,
                     range: settings.useEnhancedHaptics ? 4...150 : 30...150,
                     step: 2,
-                    format: { "\(Int((1000 / $0).rounded())) pulses/sec" },
+                    format: {
+                        localization.localizer.format(
+                            "format.settings.vibration.pulses-per-second",
+                            arguments: [Int((1000 / $0).rounded())]
+                        )
+                    },
                     caption: settings.useEnhancedHaptics
-                        ? "Past roughly 100 pulses per second the taps blur into one continuous vibration."
-                        : "Turn on enhanced haptics (Haptics pane) to unlock speeds fast enough to feel like a true vibration."
+                        ? localization.localizer.string("settings.vibration.speed.enhanced-help")
+                        : localization.localizer.string("settings.vibration.speed.standard-help")
                 )
             }
             .disabled(!settings.vibrateOnHover)
@@ -542,12 +571,15 @@ struct VibrationSettingsView: View {
 /// the preview IS the real thing.
 private struct HoldToFeelButton: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
     @State private var buzzing = false
     @State private var timer: Timer?
     @State private var step = 0
 
     var body: some View {
-        Text(buzzing ? "Feeling it…" : "Hold to Feel")
+        Text(verbatim: localization.localizer.string(
+            buzzing ? "settings.vibration.preview.active" : "settings.vibration.preview.hold"
+        ))
             .font(.body.weight(.medium))
             .padding(.horizontal, 28)
             .padding(.vertical, 9)
@@ -559,7 +591,7 @@ private struct HoldToFeelButton: View {
                     .onChanged { _ in if !buzzing { start() } }
                     .onEnded { _ in stop() }
             )
-            .accessibilityLabel("Hold to feel the vibration")
+            .accessibilityLabel(Text(verbatim: localization.localizer.string("a11y.settings.vibration.hold-to-feel")))
             .onDisappear { stop() }
     }
 
@@ -618,29 +650,36 @@ private struct HoldToFeelButton: View {
 
 struct KeyboardSettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
 
     var body: some View {
         Form {
             Section {
-                Toggle("Keyboard haptics", isOn: $settings.keyboardHapticsEnabled)
-                Text("Tick the trackpad as you type.")
+                Toggle(localization.localizer.string("settings.keyboard.enable"), isOn: $settings.keyboardHapticsEnabled)
+                Text(verbatim: localization.localizer.string("settings.keyboard.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("Fire on") {
-                Toggle("Shortcuts (a key with ⌘, ⌃, or ⌥ held)", isOn: $settings.keyboardShortcuts)
-                Toggle("Every key", isOn: $settings.keyboardAllKeys)
-                Toggle("Modifier keys on their own (⌘ ⇧ ⌥ ⌃)", isOn: $settings.keyboardModifierKeys)
+            Section(localization.localizer.string("settings.keyboard.fire-on.section")) {
+                Toggle(localization.localizer.string("settings.keyboard.shortcuts"), isOn: $settings.keyboardShortcuts)
+                Toggle(localization.localizer.string("settings.keyboard.every-key"), isOn: $settings.keyboardAllKeys)
+                Toggle(localization.localizer.string("settings.keyboard.modifier-keys"), isOn: $settings.keyboardModifierKeys)
                 HStack {
-                    Text("Waveform")
+                    Text(verbatim: localization.localizer.string("settings.keyboard.waveform"))
                     Spacer()
-                    WaveformControl(waveform: $settings.keyboardWaveform, accessibilityName: "Keyboard")
+                    WaveformControl(
+                        waveform: $settings.keyboardWaveform,
+                        accessibilityName: localization.localizer.string("settings.keyboard.accessibility-name")
+                    )
                 }
                 HStack {
-                    Text("Sound")
+                    Text(verbatim: localization.localizer.string("settings.keyboard.sound"))
                     Spacer()
-                    SoundPicker(selection: $settings.keyboardSound, accessibilityName: "Keyboard")
+                    SoundPicker(
+                        selection: $settings.keyboardSound,
+                        accessibilityName: localization.localizer.string("settings.keyboard.accessibility-name")
+                    )
                 }
             }
             .disabled(!settings.keyboardHapticsEnabled)
@@ -648,28 +687,38 @@ struct KeyboardSettingsView: View {
 
             Section {
                 ForEach(settings.keyCombos) { combo in
+                    let display = combo.localizedDisplay(using: localization.localizer)
                     HStack {
-                        Text(combo.display)
+                        Text(verbatim: display)
                             .font(.system(.body, design: .rounded).weight(.medium))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
                             .background(Color(nsColor: .quaternarySystemFill), in: RoundedRectangle(cornerRadius: 6))
                         Spacer()
-                        WaveformControl(waveform: waveformBinding(combo), accessibilityName: "Shortcut \(combo.display)")
+                        WaveformControl(
+                            waveform: waveformBinding(combo),
+                            accessibilityName: localization.localizer.format(
+                                "format.settings.keyboard.shortcut",
+                                arguments: [display]
+                            )
+                        )
                         Button {
                             settings.keyCombos.removeAll { $0.id == combo.id }
                         } label: {
                             Image(systemName: "minus.circle")
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel("Remove \(combo.display)")
+                        .accessibilityLabel(Text(verbatim: localization.localizer.format(
+                            "format.settings.keyboard.remove-shortcut",
+                            arguments: [display]
+                        )))
                     }
                 }
                 ShortcutRecorder()
             } header: {
-                Text("Custom shortcuts")
+                Text(verbatim: localization.localizer.string("settings.keyboard.custom-shortcuts.section"))
             } footer: {
-                Text("Record any combination. Each one has its own waveform.")
+                Text(verbatim: localization.localizer.string("settings.keyboard.custom-shortcuts.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -677,7 +726,7 @@ struct KeyboardSettingsView: View {
             .opacity(settings.keyboardHapticsEnabled ? 1 : 0.45)
 
             Section {
-                Label("Keys are compared on your Mac and discarded. Nothing is stored or sent.", systemImage: "lock.shield.fill")
+                Label(localization.localizer.string("settings.keyboard.privacy"), systemImage: "lock.shield.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -704,6 +753,7 @@ struct KeyboardSettingsView: View {
 private struct ShortcutRecorder: View {
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var controller: AppController
+    @EnvironmentObject private var localization: LocalizationController
 
     @State private var isRecording = false
     @State private var monitor: Any?
@@ -715,11 +765,15 @@ private struct ShortcutRecorder: View {
             Button {
                 isRecording ? stop() : begin()
             } label: {
-                Label(isRecording ? "Press a key combination…" : "Record Shortcut",
-                      systemImage: isRecording ? "record.circle.fill" : "plus")
+                Label(
+                    localization.localizer.string(
+                        isRecording ? "settings.keyboard.recording" : "settings.keyboard.record"
+                    ),
+                    systemImage: isRecording ? "record.circle.fill" : "plus"
+                )
             }
             if isRecording {
-                Text("Esc cancels")
+                Text(verbatim: localization.localizer.string("settings.keyboard.escape-cancels"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -774,6 +828,7 @@ private struct ShortcutRecorder: View {
 
 struct VisualAidsView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
 
     var body: some View {
         Form {
@@ -784,67 +839,87 @@ struct VisualAidsView: View {
                     .listRowInsets(EdgeInsets())
             }
 
-            Section("Cursor ring") {
-                Toggle("Ring around the cursor", isOn: $settings.hoverCircleEnabled)
+            Section(localization.localizer.string("settings.visual.cursor-ring.section")) {
+                Toggle(localization.localizer.string("settings.visual.cursor-ring.enable"), isOn: $settings.hoverCircleEnabled)
                 LabeledSlider(
-                    title: "Ring size",
+                    title: localization.localizer.string("settings.visual.cursor-ring.size"),
                     value: $settings.hoverCircleDiameter,
                     range: 12...44,
                     step: 2,
-                    format: { "\(Int($0)) pt" },
+                    format: {
+                        localization.localizer.format(
+                            "format.unit.points.integer",
+                            arguments: [Int($0)]
+                        )
+                    },
                     caption: nil
                 )
                 .disabled(!settings.hoverCircleEnabled)
                 LabeledSlider(
-                    title: "Outline thickness",
+                    title: localization.localizer.string("settings.visual.cursor-ring.outline-thickness"),
                     value: $settings.hoverCircleStrokeWidth,
                     range: 1...8,
                     step: 0.5,
-                    format: { String(format: "%.1f pt", $0) },
+                    format: {
+                        localization.localizer.format(
+                            "format.unit.points.decimal",
+                            arguments: [$0]
+                        )
+                    },
                     caption: nil
                 )
                 .disabled(!settings.hoverCircleEnabled || settings.hoverCircleFilled)
-                Toggle("Fill the ring", isOn: $settings.hoverCircleFilled)
+                Toggle(localization.localizer.string("settings.visual.cursor-ring.fill"), isOn: $settings.hoverCircleFilled)
                     .disabled(!settings.hoverCircleEnabled)
             }
 
-            Section("Element highlight") {
-                Toggle("Highlight the hovered element", isOn: $settings.elementHighlightEnabled)
+            Section(localization.localizer.string("settings.visual.element-highlight.section")) {
+                Toggle(localization.localizer.string("settings.visual.element-highlight.enable"), isOn: $settings.elementHighlightEnabled)
                 LabeledSlider(
-                    title: "Highlight thickness",
+                    title: localization.localizer.string("settings.visual.element-highlight.thickness"),
                     value: $settings.elementHighlightWidth,
                     range: 1...8,
                     step: 0.5,
-                    format: { String(format: "%.1f pt", $0) },
+                    format: {
+                        localization.localizer.format(
+                            "format.unit.points.decimal",
+                            arguments: [$0]
+                        )
+                    },
                     caption: nil
                 )
                 .disabled(!settings.elementHighlightEnabled)
             }
 
             Section {
-                Toggle("Crosshair guides", isOn: $settings.crosshairEnabled)
+                Toggle(localization.localizer.string("settings.visual.crosshair.enable"), isOn: $settings.crosshairEnabled)
                 LabeledSlider(
-                    title: "Guide thickness",
+                    title: localization.localizer.string("settings.visual.crosshair.thickness"),
                     value: $settings.crosshairWidth,
                     range: 1...6,
                     step: 0.5,
-                    format: { String(format: "%.1f pt", $0) },
+                    format: {
+                        localization.localizer.format(
+                            "format.unit.points.decimal",
+                            arguments: [$0]
+                        )
+                    },
                     caption: nil
                 )
                 .disabled(!settings.crosshairEnabled)
-                Toggle("Name the hovered element", isOn: $settings.hoverCaptionEnabled)
-                Toggle("Flash a ripple when haptics fire", isOn: $settings.fireFlashEnabled)
+                Toggle(localization.localizer.string("settings.visual.hover-caption.enable"), isOn: $settings.hoverCaptionEnabled)
+                Toggle(localization.localizer.string("settings.visual.fire-flash.enable"), isOn: $settings.fireFlashEnabled)
             } header: {
-                Text("More aids")
+                Text(verbatim: localization.localizer.string("settings.visual.more-aids.section"))
             } footer: {
-                Text("Crosshair guides locate the pointer at a glance. The name tag shows what's under the cursor (\u{201C}Save · Button\u{201D}). The ripple makes each haptic visible.")
+                Text(verbatim: localization.localizer.string("settings.visual.more-aids.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("Colors") {
-                ColorPicker("Clickable", selection: colorBinding(\.clickableColorHex, fallback: .systemGreen))
-                ColorPicker("Dangerous", selection: colorBinding(\.dangerColorHex, fallback: .systemRed))
+            Section(localization.localizer.string("settings.visual.colors.section")) {
+                ColorPicker(localization.localizer.string("settings.visual.colors.clickable"), selection: colorBinding(\.clickableColorHex, fallback: .systemGreen))
+                ColorPicker(localization.localizer.string("settings.visual.colors.dangerous"), selection: colorBinding(\.dangerColorHex, fallback: .systemRed))
             }
         }
         .formStyle(.grouped)
@@ -863,6 +938,7 @@ struct VisualAidsView: View {
 /// configured. Changing any control updates it instantly.
 private struct VisualAidPreview: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 40)) { context in
@@ -889,8 +965,18 @@ private struct VisualAidPreview: View {
                             .position(x: x, y: geo.size.height / 2)
                     }
 
-                    sample("Button", frame: safeFrame, highlighted: overSafe, color: clickableColor)
-                    sample("Delete", frame: dangerFrame, highlighted: overDanger, color: dangerColor)
+                    sample(
+                        localization.localizer.string("settings.visual.preview.button"),
+                        frame: safeFrame,
+                        highlighted: overSafe,
+                        color: clickableColor
+                    )
+                    sample(
+                        localization.localizer.string("settings.visual.preview.delete"),
+                        frame: dangerFrame,
+                        highlighted: overDanger,
+                        color: dangerColor
+                    )
 
                     if settings.fireFlashEnabled, overSafe || overDanger {
                         // Ripple keyed to entering a control, like the real echo.
@@ -916,7 +1002,11 @@ private struct VisualAidPreview: View {
                         .position(x: x + 1, y: y - 1)
 
                     if settings.hoverCaptionEnabled, overSafe || overDanger {
-                        Text(overDanger ? "Delete · Button" : "Button · Button")
+                        Text(verbatim: localization.localizer.string(
+                            overDanger
+                                ? "settings.visual.preview.delete-caption"
+                                : "settings.visual.preview.button-caption"
+                        ))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 8)
@@ -927,7 +1017,7 @@ private struct VisualAidPreview: View {
 
                     if !settings.hoverCircleEnabled && !settings.elementHighlightEnabled
                         && !settings.crosshairEnabled && !settings.hoverCaptionEnabled && !settings.fireFlashEnabled {
-                        Text("Turn on an aid below to preview it")
+                        Text(verbatim: localization.localizer.string("settings.visual.preview.empty"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .position(x: w / 2, y: geo.size.height - 12)
@@ -937,13 +1027,13 @@ private struct VisualAidPreview: View {
         }
         .background(Color(nsColor: .underPageBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .accessibilityLabel("Live preview of the cursor circle and element highlight")
+        .accessibilityLabel(Text(verbatim: localization.localizer.string("a11y.settings.visual.preview")))
     }
 
     private func sample(_ title: String, frame: CGRect, highlighted: Bool, color: Color) -> some View {
         RoundedRectangle(cornerRadius: 7)
             .fill(Color(nsColor: .controlColor))
-            .overlay(Text(title).font(.callout))
+            .overlay(Text(verbatim: title).font(.callout))
             .overlay {
                 if settings.elementHighlightEnabled && highlighted {
                     RoundedRectangle(cornerRadius: 7)
@@ -971,6 +1061,7 @@ private struct VisualAidPreview: View {
 
 struct SoundSettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
     @State private var customSounds = AudioFeedbackEngine.customSounds()
     @State private var importError: String?
     @State private var previewEngine = AudioFeedbackEngine()
@@ -984,28 +1075,30 @@ struct SoundSettingsView: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Play a click sound", isOn: $settings.audioEnabled)
-                Text("Useful with an external mouse, where trackpad haptics can't be felt.")
+                Toggle(localization.localizer.string("settings.sound.enable"), isOn: $settings.audioEnabled)
+                Text(verbatim: localization.localizer.string("settings.sound.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
-                Picker("Sound", selection: $settings.audioSoundName) {
-                    Section("Synthesized") {
+                Picker(localization.localizer.string("settings.sound.picker"), selection: $settings.audioSoundName) {
+                    Section(localization.localizer.string("settings.sound.synthesized.section")) {
                         ForEach(AudioFeedbackEngine.synthSounds, id: \.self) { identifier in
-                            Text(AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
+                            if let style = SynthClickEngine.Style(identifier: identifier) {
+                                Text(verbatim: style.localizedName(using: localization.localizer)).tag(identifier)
+                            }
                         }
                     }
-                    Section("System") {
+                    Section(localization.localizer.string("settings.sound.system.section")) {
                         ForEach(AudioFeedbackEngine.availableSounds, id: \.self) { name in
-                            Text(name).tag(name)
+                            Text(verbatim: name).tag(name)
                         }
                     }
                     if !customSounds.isEmpty {
-                        Section("Imported") {
+                        Section(localization.localizer.string("settings.sound.imported.section")) {
                             ForEach(customSounds, id: \.self) { identifier in
-                                Text(AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
+                                Text(verbatim: AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
                             }
                         }
                     }
@@ -1016,28 +1109,38 @@ struct SoundSettingsView: View {
 
                 if SynthClickEngine.Style(identifier: settings.audioSoundName) != nil {
                     LabeledSlider(
-                        title: "Pitch",
+                        title: localization.localizer.string("settings.sound.pitch"),
                         value: $settings.audioPitch,
                         range: 0.5...2.0,
                         step: 0.05,
-                        format: { String(format: "%.2fx", $0) },
+                        format: {
+                            localization.localizer.format(
+                                "format.settings.sound.pitch-multiplier",
+                                arguments: [$0]
+                            )
+                        },
                         caption: nil
                     )
                     .onChange(of: settings.audioPitch) { _, _ in
                         playPreview()
                     }
-                    Toggle("Vary the tone a little on each click", isOn: $settings.audioToneVariation)
+                    Toggle(localization.localizer.string("settings.sound.vary-tone"), isOn: $settings.audioToneVariation)
                         .onChange(of: settings.audioToneVariation) { _, _ in
                             playPreview()
                         }
                 }
 
                 LabeledSlider(
-                    title: "Volume",
+                    title: localization.localizer.string("settings.sound.volume"),
                     value: $settings.audioVolume,
                     range: 0.1...1.0,
                     step: 0.1,
-                    format: { "\(Int($0 * 100))%" },
+                    format: {
+                        localization.localizer.format(
+                            "format.percent.integer",
+                            arguments: [Int($0 * 100)]
+                        )
+                    },
                     caption: nil
                 )
                 .onChange(of: settings.audioVolume) { _, _ in
@@ -1045,24 +1148,24 @@ struct SoundSettingsView: View {
                 }
 
                 HStack {
-                    Button("Import Sound…") { importSound() }
+                    Button(localization.localizer.string("settings.sound.import")) { importSound() }
                     if AudioFeedbackEngine.customFilename(from: settings.audioSoundName) != nil {
-                        Button("Remove This Sound") {
+                        Button(localization.localizer.string("settings.sound.remove")) {
                             AudioFeedbackEngine.removeSound(settings.audioSoundName)
                             settings.audioSoundName = AudioFeedbackEngine.availableSounds[0]
                             customSounds = AudioFeedbackEngine.customSounds()
                         }
                     }
                     Spacer()
-                    Button("Test") { playPreview() }
+                    Button(localization.localizer.string("settings.sound.test")) { playPreview() }
                 }
             } footer: {
                 if let importError {
-                    Text(importError)
+                    Text(verbatim: importError)
                         .font(.caption)
                         .foregroundStyle(.red)
                 } else {
-                    Text("Picking a sound plays it. Short sounds work best. Each element type can also pick its own sound in Haptics.")
+                    Text(verbatim: localization.localizer.string("settings.sound.picker.explanation"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -1094,7 +1197,9 @@ struct SoundSettingsView: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.audio]
         panel.allowsMultipleSelection = false
-        panel.message = "Choose an audio file to use as a click"
+        panel.title = localization.localizer.string("dialog.sound.choose.title")
+        panel.message = localization.localizer.string("dialog.sound.choose.message")
+        panel.prompt = localization.localizer.string("dialog.sound.choose.prompt")
         guard panel.runModal() == .OK, let url = panel.url else { return }
         importCandidate = ImportCandidate(url: url)
     }
@@ -1104,43 +1209,63 @@ struct SoundSettingsView: View {
 
 struct PerformanceSettingsView: View {
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
 
     var body: some View {
         Form {
             Section {
                 LabeledSlider(
-                    title: "Polling rate",
+                    title: localization.localizer.string("settings.performance.polling-rate"),
                     value: $settings.pollingHz,
                     range: 30...120,
                     step: 10,
-                    format: { "\(Int($0)) Hz" },
-                    caption: "How often the cursor is checked while moving. Higher feels more immediate; lower uses slightly less CPU. Idle cost is always zero."
+                    format: {
+                        localization.localizer.format(
+                            "format.unit.hertz",
+                            arguments: [Int($0)]
+                        )
+                    },
+                    caption: localization.localizer.string("settings.performance.polling-rate.explanation")
                 )
                 .disabled(settings.noLagMode)
 
-                Toggle("No Lag mode", isOn: $settings.noLagMode)
-                Text("Checks on every mouse event for the most instant feel. Uses more CPU while the mouse is moving.")
+                Toggle(localization.localizer.string("settings.performance.no-lag"), isOn: $settings.noLagMode)
+                Text(verbatim: localization.localizer.string("settings.performance.no-lag.explanation"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
             Section {
                 LabeledSlider(
-                    title: "Minimum time between taps",
+                    title: localization.localizer.string("settings.performance.rate-limit"),
                     value: $settings.rateLimitMs,
                     range: 0...500,
                     step: 25,
-                    format: { $0 == 0 ? "Off" : "\(Int($0)) ms" },
-                    caption: "Raise this if sweeping across toolbars feels too busy."
+                    format: { value in
+                        value == 0
+                            ? localization.localizer.string("settings.common.off")
+                            : localization.localizer.format(
+                                "format.unit.milliseconds",
+                                arguments: [Int(value)]
+                            )
+                    },
+                    caption: localization.localizer.string("settings.performance.rate-limit.explanation")
                 )
 
                 LabeledSlider(
-                    title: "Dwell delay",
+                    title: localization.localizer.string("settings.performance.dwell-delay"),
                     value: $settings.dwellMs,
                     range: 0...1000,
                     step: 50,
-                    format: { $0 == 0 ? "Off" : "\(Int($0)) ms" },
-                    caption: "The cursor must rest on an element this long before it taps. Reduces noise and helps steady targeting."
+                    format: { value in
+                        value == 0
+                            ? localization.localizer.string("settings.common.off")
+                            : localization.localizer.format(
+                                "format.unit.milliseconds",
+                                arguments: [Int(value)]
+                            )
+                    },
+                    caption: localization.localizer.string("settings.performance.dwell-delay.explanation")
                 )
             }
         }
@@ -1153,6 +1278,7 @@ struct PerformanceSettingsView: View {
 
 struct AboutView: View {
     @ObservedObject private var updater = Updater.shared
+    @EnvironmentObject private var localization: LocalizationController
 
     private static let feedbackURL = "https://github.com/Mason363/Tactile/issues/new/choose"
     private static let repoURL = "https://github.com/Mason363/Tactile"
@@ -1163,7 +1289,10 @@ struct AboutView: View {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "?"
         let build = info?["CFBundleVersion"] as? String ?? "?"
-        return "Version \(short) (\(build))"
+        return localization.localizer.format(
+            "format.settings.about.version",
+            arguments: [short, build]
+        )
     }
 
     var body: some View {
@@ -1174,13 +1303,13 @@ struct AboutView: View {
                         .resizable()
                         .frame(width: 96, height: 96)
                         .accessibilityHidden(true)
-                    Text("Tactile")
+                    Text(verbatim: "Tactile")
                         .font(.system(size: 22, weight: .semibold))
-                    Text(versionText)
+                    Text(verbatim: versionText)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
-                    Button("Check for Updates…") { updater.checkForUpdates() }
+                    Button(localization.localizer.string("settings.about.check-for-updates")) { updater.checkForUpdates() }
                         .disabled(!updater.canCheckForUpdates)
                         .padding(.top, 2)
                 }
@@ -1190,16 +1319,20 @@ struct AboutView: View {
             }
 
             Section {
-                aboutLink("Send Feedback or Report an Issue", systemImage: "exclamationmark.bubble.fill", url: Self.feedbackURL)
-                aboutLink("View Source on GitHub", systemImage: "chevron.left.forwardslash.chevron.right", url: Self.repoURL)
-                aboutLink("Buy Me a Coffee", systemImage: "cup.and.saucer.fill", url: Self.coffeeURL)
+                aboutLink("settings.about.feedback", systemImage: "exclamationmark.bubble.fill", url: Self.feedbackURL)
+                aboutLink("settings.about.source", systemImage: "chevron.left.forwardslash.chevron.right", url: Self.repoURL)
+                aboutLink("settings.about.coffee", systemImage: "cup.and.saucer.fill", url: Self.coffeeURL)
             }
 
             Section {
                 Link(destination: URL(string: Self.siteURL)!) {
-                    Text("www.masn.studio")
+                    Text(verbatim: "www.masn.studio")
                 }
-                Text("Made with \(Text("❤️").accessibilityLabel("love")) by Mason Chen")
+                Text(verbatim: localization.localizer.format(
+                    "format.settings.about.made-by",
+                    arguments: ["❤️", "Mason Chen"]
+                ))
+                    .accessibilityLabel(Text(verbatim: localization.localizer.string("a11y.settings.about.made-by")))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .listRowBackground(Color.clear)
@@ -1208,9 +1341,9 @@ struct AboutView: View {
         .formStyle(.grouped)
     }
 
-    private func aboutLink(_ title: String, systemImage: String, url: String) -> some View {
+    private func aboutLink(_ titleKey: String, systemImage: String, url: String) -> some View {
         Link(destination: URL(string: url)!) {
-            Label(title, systemImage: systemImage)
+            Label(localization.localizer.string(titleKey), systemImage: systemImage)
         }
     }
 }
@@ -1228,19 +1361,19 @@ struct LabeledSlider: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(title)
+                Text(verbatim: title)
                 Spacer()
-                Text(format(value))
+                Text(verbatim: format(value))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
             Slider(value: $value, in: range, step: step) {
-                Text(title)
+                Text(verbatim: title)
             }
             .labelsHidden()
             .accessibilityValue(format(value))
             if let caption {
-                Text(caption)
+                Text(verbatim: caption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

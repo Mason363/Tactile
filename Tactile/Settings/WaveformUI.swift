@@ -42,6 +42,7 @@ struct WaveformControl: View {
     var accessibilityName: String
 
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
     @State private var showEditor = false
 
     private var choice: Binding<WaveformChoice> {
@@ -68,34 +69,46 @@ struct WaveformControl: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Picker("Waveform for \(accessibilityName)", selection: choice) {
+            Picker(localization.localizer.format(
+                "a11y.waveform.for",
+                arguments: [accessibilityName]
+            ), selection: choice) {
                 ForEach(WaveformPreset.allCases) { preset in
-                    Text(preset.displayName).tag(WaveformChoice.preset(preset))
+                    Text(verbatim: preset.localizedName(using: localization.localizer))
+                        .tag(WaveformChoice.preset(preset))
                 }
                 if !settings.customHaptics.isEmpty {
                     Divider()
                     ForEach(settings.customHaptics) { haptic in
-                        Text(haptic.name).tag(WaveformChoice.saved(haptic.id))
+                        Text(verbatim: haptic.name).tag(WaveformChoice.saved(haptic.id))
                     }
                 }
-                Text("Custom").tag(WaveformChoice.custom)
+                Text(verbatim: localization.localizer.string("waveform.custom"))
+                    .tag(WaveformChoice.custom)
             }
             .labelsHidden()
             .fixedSize()
 
-            Button("Edit") {
+            Button(localization.localizer.string("waveform.edit")) {
                 showEditor = true
             }
-            .accessibilityLabel("Edit waveform for \(accessibilityName)")
+            .accessibilityLabel(Text(verbatim: localization.localizer.format(
+                "a11y.waveform.edit",
+                arguments: [accessibilityName]
+            )))
 
-            Button("Try") {
+            Button(localization.localizer.string("waveform.try")) {
                 HapticPreview.play(waveform, enhanced: settings.useEnhancedHaptics)
             }
-            .accessibilityLabel("Try waveform for \(accessibilityName)")
+            .accessibilityLabel(Text(verbatim: localization.localizer.format(
+                "a11y.waveform.try",
+                arguments: [accessibilityName]
+            )))
         }
         .sheet(isPresented: $showEditor) {
             WaveformEditorView(waveform: $waveform, title: accessibilityName)
                 .environmentObject(settings)
+                .environmentObject(localization)
         }
     }
 }
@@ -106,22 +119,27 @@ struct WaveformEditorView: View {
     var title: String
 
     @EnvironmentObject private var settings: SettingsStore
+    @EnvironmentObject private var localization: LocalizationController
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Waveform: \(title)")
+            Text(verbatim: localization.localizer.format(
+                "format.waveform.title",
+                arguments: [title]
+            ))
                 .font(.headline)
-            Text("A waveform is a sequence of pulses. Set each pulse's strength and the pause before the next one.")
+            Text(verbatim: localization.localizer.string("settings.studio.waveform-note"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             List {
                 ForEach($waveform.steps) { $step in
                     HStack {
-                        Picker("Strength", selection: $step.strength) {
+                        Picker(localization.localizer.string("waveform.strength"), selection: $step.strength) {
                             ForEach(FeedbackPattern.allCases) { pattern in
-                                Text(pattern.displayName).tag(pattern)
+                                Text(verbatim: pattern.localizedName(using: localization.localizer))
+                                    .tag(pattern)
                             }
                         }
                         .labelsHidden()
@@ -129,9 +147,12 @@ struct WaveformEditorView: View {
 
                         if step.id != waveform.steps.last?.id {
                             Slider(value: $step.gapMs, in: 20...400, step: 10) {
-                                Text("Pause after pulse")
+                                Text(verbatim: localization.localizer.string("waveform.pause-after-pulse"))
                             }
-                            Text("\(Int(step.gapMs)) ms")
+                            Text(verbatim: localization.localizer.format(
+                                "format.waveform.duration-ms",
+                                arguments: [Int(step.gapMs)]
+                            ))
                                 .monospacedDigit()
                                 .foregroundStyle(.secondary)
                                 .frame(width: 56, alignment: .trailing)
@@ -146,7 +167,9 @@ struct WaveformEditorView: View {
                         }
                         .buttonStyle(.borderless)
                         .disabled(waveform.steps.count <= 1)
-                        .accessibilityLabel("Remove pulse")
+                        .accessibilityLabel(Text(verbatim: localization.localizer.string(
+                            "a11y.waveform.remove-pulse"
+                        )))
                     }
                 }
             }
@@ -159,17 +182,17 @@ struct WaveformEditorView: View {
                     waveform.steps[waveform.steps.count - 1] = last
                     waveform.steps.append(WaveformStep(strength: .generic, gapMs: 0))
                 } label: {
-                    Label("Add Pulse", systemImage: "plus")
+                    Label(localization.localizer.string("waveform.add-pulse"), systemImage: "plus")
                 }
                 .disabled(waveform.steps.count >= 8)
 
                 Spacer()
 
-                Button("Play") {
+                Button(localization.localizer.string("waveform.play")) {
                     HapticPreview.play(waveform, enhanced: settings.useEnhancedHaptics)
                 }
 
-                Button("Done") {
+                Button(localization.localizer.string("dialog.done")) {
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)

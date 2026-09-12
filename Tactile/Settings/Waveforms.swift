@@ -72,18 +72,10 @@ enum WaveformPreset: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var displayName: String {
-        switch self {
-        case .lightTap: return "Light Tap"
-        case .tap: return "Tap"
-        case .firmTap: return "Firm Tap"
-        case .doubleTap: return "Double Tap"
-        case .tripleTap: return "Triple Tap"
-        case .rampUp: return "Ramp Up"
-        case .rampDown: return "Ramp Down"
-        case .shake: return "Shake"
-        case .heartbeat: return "Heartbeat"
-        }
+    var nameLocalizationKey: String { "waveform.preset.\(rawValue).name" }
+
+    func localizedName(using localizer: Localizer) -> String {
+        localizer.string(nameLocalizationKey)
     }
 
     var waveform: HapticWaveform {

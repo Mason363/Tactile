@@ -10,6 +10,7 @@ import SwiftUI
 struct TactileApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @ObservedObject private var controller = AppController.shared
+    @ObservedObject private var localization = AppController.shared.localization
 
     var body: some Scene {
         MenuBarExtra {
@@ -17,6 +18,8 @@ struct TactileApp: App {
                 .environmentObject(controller)
                 .environmentObject(controller.settings)
                 .environmentObject(controller.permission)
+                .environmentObject(localization)
+                .environment(\.locale, localization.locale)
         } label: {
             // The braille-T mark, as a template image so the system tints it
             // for menu bar appearance. Built as an NSImage with isTemplate set
@@ -25,13 +28,15 @@ struct TactileApp: App {
             // at-a-glance signal that accessibility permission is missing.
             if controller.permission.isTrusted {
                 Image(nsImage: Self.menuBarIcon)
-                    .accessibilityLabel("Tactile")
+                    .accessibilityLabel(Text(verbatim: localization.localizer.string("a11y.menu-bar.tactile")))
             } else {
                 Image(systemName: "cursorarrow.slash")
-                    .accessibilityLabel("Tactile, accessibility access needed")
+                    .accessibilityLabel(Text(verbatim: localization.localizer.string("a11y.menu-bar.permission-needed")))
             }
         }
         .menuBarExtraStyle(.menu)
+        .environmentObject(localization)
+        .environment(\.locale, localization.locale)
     }
 
     private static let menuBarIcon: NSImage = {

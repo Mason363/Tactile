@@ -27,7 +27,7 @@ final class FeedbackController {
 
     /// Tells the visual hover indicator what the cursor is over (and where,
     /// in accessibility coordinates), plus a short caption naming it
-    /// ("Save - Button"). Only called when the hovered element changes.
+    /// ("Save - Button"). Also refreshed when the selected language changes.
     var onHoverState: ((HoverKind, CGRect?, String?) -> Void)?
 
     /// Fires with every haptic activation - drives the fire-flash visual
@@ -37,12 +37,25 @@ final class FeedbackController {
     private let haptics = SystemHapticEngine()
     private let audio = AudioFeedbackEngine()
     private let player = WaveformPlayer()
+    private let languagePacks: LanguagePackRegistry
     /// A separate player for keyboard ticks so typing never cancels an
     /// in-flight hover waveform (and vice versa).
     private let keyPlayer = WaveformPlayer()
     private var lastKeyTickTime: CFTimeInterval = 0
     /// Lines scrolled since the last scroll tick.
     private var scrollAccumulator: Double = 0
+
+    private struct HoverPresentation {
+        var kind: HoverKind
+        var frame: CGRect?
+        var category: FeedbackCategory
+        var label: String?
+    }
+
+    /// The semantic hover state is retained separately from its translated
+    /// caption so changing languages can redraw the label without replaying
+    /// feedback or waiting for another mouse movement.
+    private var hoverPresentation: HoverPresentation?
 
     private var lastElement: AXUIElement?
     private var lastWindow: AXUIElement?
@@ -93,8 +106,9 @@ final class FeedbackController {
 
     private let log = Logger(subsystem: "com.masonchen.Tactile", category: "feedback")
 
-    init(config: FeedbackConfig) {
+    init(config: FeedbackConfig, languagePacks: LanguagePackRegistry? = nil) {
         self.config = config
+        self.languagePacks = languagePacks ?? LanguagePackRegistry()
         ActuatorHapticEngine.shared?.target = config.hapticDevice
     }
 
@@ -117,7 +131,7 @@ final class FeedbackController {
             if pointInRegion { return }
             activeFireRegion = nil
             onSkipRegionUpdate?(Self.jitterBox(around: point))
-            onHoverState?(.none, nil, nil)
+            publishNoHover()
             leaveCurrentElement(enteringFiringElement: false)
             lastElement = nil
             return
@@ -276,7 +290,7 @@ final class FeedbackController {
         else {
             // "leave" (or a malformed hover): end the current element, playing
             // the hover-out waveform if one fired.
-            onHoverState?(.none, nil, nil)
+            publishNoHover()
             leaveCurrentElement(enteringFiringElement: false)
             lastElement = nil
             // NO leave message may clear the fire region - ever. The region's
@@ -303,7 +317,7 @@ final class FeedbackController {
             }
             let kind: HoverKind = !(message.enabled ?? true) ? .disabled
                 : ((message.danger ?? false) ? .danger : .clickable)
-            onHoverState?(kind, rect, Self.caption(category: category, label: message.label))
+            publishHover(kind: kind, frame: rect, category: category, label: message.label)
             return
         }
 
@@ -311,7 +325,7 @@ final class FeedbackController {
         // the accessibility path applies. (No rect means an older extension;
         // fail open.)
         if let rect, !Self.isControlSized(rect) {
-            onHoverState?(.none, nil, nil)
+            publishNoHover()
             leaveCurrentElement(enteringFiringElement: false)
             return
         }
@@ -324,9 +338,9 @@ final class FeedbackController {
 
         if passes {
             let kind: HoverKind = !enabled ? .disabled : ((message.danger ?? false) ? .danger : .clickable)
-            onHoverState?(kind, rect, Self.caption(category: category, label: message.label))
+            publishHover(kind: kind, frame: rect, category: category, label: message.label)
         } else {
-            onHoverState?(.none, nil, nil)
+            publishNoHover()
         }
 
         guard passes else { return }
@@ -458,6 +472,9 @@ final class FeedbackController {
     /// Forgets the current element so re-entering it ticks again.
     func reset() {
         log.debug("reset")
+        // Drop the retained caption without redrawing: reset() also runs while
+        // the pipeline is stopped, and redrawing would re-show hidden aids.
+        hoverPresentation = nil
         lastElement = nil
         lastWindow = nil
         firedForCurrentElement = false
@@ -492,9 +509,8 @@ final class FeedbackController {
     /// Reduces a resolution to what the visual indicator shows: nothing,
     /// clickable, destructive, or disabled - plus the caption naming it.
     private func emitHoverState(category: FeedbackCategory?, resolved: ResolvedElement) {
-        guard let onHoverState else { return }
         guard let category, config.enabledCategories.contains(category), passesSimpleMode(category, resolved) else {
-            onHoverState(.none, nil, nil)
+            publishNoHover()
             return
         }
         let kind: HoverKind
@@ -505,15 +521,52 @@ final class FeedbackController {
         } else {
             kind = .clickable
         }
-        onHoverState(kind, resolved.frame, Self.caption(category: category, label: resolved.title))
+        publishHover(kind: kind, frame: resolved.frame, category: category, label: resolved.title)
     }
 
-    /// "Save - Button", or just "Button" when the element has no usable name.
-    private static func caption(category: FeedbackCategory, label: String?) -> String {
+    /// Re-emits only the visual label. It intentionally does not touch any
+    /// haptic, dwell, rate-limit, or element identity state.
+    func refreshLocalizedPresentation() {
+        guard let hoverPresentation, config.hoverCaptionEnabled else { return }
+        onHoverState?(
+            hoverPresentation.kind,
+            hoverPresentation.frame,
+            caption(category: hoverPresentation.category, label: hoverPresentation.label)
+        )
+    }
+
+    private func publishNoHover() {
+        hoverPresentation = nil
+        onHoverState?(.none, nil, nil)
+    }
+
+    private func publishHover(kind: HoverKind, frame: CGRect?, category: FeedbackCategory, label: String?) {
+        hoverPresentation = HoverPresentation(kind: kind, frame: frame, category: category, label: label)
+        // A caption costs localized lookups on the way to the tick; only
+        // build it when the caption aid will show it.
+        let text = config.hoverCaptionEnabled ? caption(category: category, label: label) : nil
+        onHoverState?(kind, frame, text)
+    }
+
+    /// "Save · Button", or just "Button" when the element has no usable name.
+    private func caption(category: FeedbackCategory, label: String?) -> String {
+        let fallback = languagePacks.englishPack
+        let selected = languagePacks.pack(identifier: config.languageIdentifier) ?? fallback
+        let localizer = Localizer(pack: selected, fallback: fallback)
+        let categoryName = category.localizedCaption(using: localizer)
         let name = (label ?? "").replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty else { return category.captionName }
-        return "\(name.count > 40 ? String(name.prefix(39)) + "…" : name) · \(category.captionName)"
+        guard !name.isEmpty else {
+            return localizer.format(
+                "feedback.hover-caption.category-only",
+                arguments: [categoryName]
+            )
+        }
+        let shortenedName = name.count > 40 ? String(name.prefix(39)) + "…" : name
+        return localizer.format(
+            "feedback.hover-caption.with-label",
+            arguments: [shortenedName, categoryName]
+        )
     }
 
     private func willFire(_ category: FeedbackCategory, resolved: ResolvedElement) -> Bool {
