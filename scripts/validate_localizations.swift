@@ -380,7 +380,22 @@ func loadStrings(at url: URL, report: inout ValidationReport, packageID: String)
         for (key, value) in parsed.values where value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             report.fail("\(packageID)/Localizable.strings: empty value for key '\(key)'")
         }
-        return parsed.values
+        // Check what the app will display: Foundation decodes the table at
+        // runtime, and a few escapes (lowercase \u, octal) decode differently
+        // in the parser above. A disagreement means the translation would not
+        // show as written.
+        guard let runtimeValues = (try? PropertyListSerialization.propertyList(
+            from: data, options: [], format: nil
+        )) as? [String: String] else {
+            report.fail("\(packageID)/Localizable.strings: Foundation cannot read this table")
+            return parsed.values
+        }
+        for key in parsed.values.keys.sorted() where runtimeValues[key] != parsed.values[key] {
+            report.fail(
+                "\(packageID)/Localizable.strings: '\(key)' decodes differently at runtime; check its escape sequences"
+            )
+        }
+        return runtimeValues
     } catch let failure as ParseFailure {
         report.fail("\(packageID)/Localizable.strings: \(failure)")
     } catch {
@@ -1163,7 +1178,7 @@ func runMatcherMatrix(
 
     struct MatcherCase {
         let name: String
-        let preferred: String?
+        let preferred: [String]
         let available: [String]
         let expected: String
     }
@@ -1171,43 +1186,48 @@ func runMatcherMatrix(
     @main
     struct MatcherHarness {
         static func main() {
+            // Expected values are what macOS picks for the app bundle, so the
+            // app never shows a different language from the system UI.
             let cases = [
-                MatcherCase(name: "zh-Hans exact", preferred: "zh-Hans", available: ["en", "zh-Hans"], expected: "zh-Hans"),
-                MatcherCase(name: "zh-Hans-CN -> zh-Hans", preferred: "zh-Hans-CN", available: ["en", "zh-Hans"], expected: "zh-Hans"),
-                MatcherCase(name: "zh-CN -> zh-Hans", preferred: "zh-CN", available: ["en", "zh-Hans"], expected: "zh-Hans"),
-                MatcherCase(name: "zh-SG -> zh-Hans", preferred: "zh-SG", available: ["en", "zh-Hans"], expected: "zh-Hans"),
-                MatcherCase(name: "zh-Hant exact", preferred: "zh-Hant", available: ["en", "zh-Hant"], expected: "zh-Hant"),
-                MatcherCase(name: "zh-Hant -> en", preferred: "zh-Hant", available: ["en", "zh-Hans"], expected: "en"),
-                MatcherCase(name: "zh-TW -> en", preferred: "zh-TW", available: ["en", "zh-Hans"], expected: "en"),
-                MatcherCase(name: "zh-HK -> en", preferred: "zh-HK", available: ["en", "zh-Hans"], expected: "en"),
-                MatcherCase(name: "zh-MO -> en", preferred: "zh-MO", available: ["en", "zh-Hans"], expected: "en"),
-                MatcherCase(name: "en exact", preferred: "en", available: ["en"], expected: "en"),
-                MatcherCase(name: "en-US -> en", preferred: "en-US", available: ["en"], expected: "en"),
-                MatcherCase(name: "en-GB -> en", preferred: "en-GB", available: ["en"], expected: "en"),
-                MatcherCase(name: "fr exact", preferred: "fr", available: ["en", "fr"], expected: "fr"),
-                MatcherCase(name: "fr-FR -> fr", preferred: "fr-FR", available: ["en", "fr"], expected: "fr"),
-                MatcherCase(name: "fr-FR does not use fr-CA", preferred: "fr-FR", available: ["en", "fr-CA"], expected: "en"),
-                MatcherCase(name: "pt exact", preferred: "pt", available: ["en", "pt"], expected: "pt"),
-                MatcherCase(name: "pt-BR does not use pt-PT", preferred: "pt-BR", available: ["en", "pt-PT"], expected: "en"),
-                MatcherCase(name: "pt-PT exact match", preferred: "pt-PT", available: ["en", "pt-PT"], expected: "pt-PT"),
-                MatcherCase(name: "pt-BR uses generic pt", preferred: "pt-BR", available: ["en", "pt"], expected: "pt"),
-                MatcherCase(name: "Unicode extension is ignored", preferred: "zh-CN-u-nu-hanidec", available: ["en", "zh-Hans"], expected: "zh-Hans"),
-                MatcherCase(name: "Unicode extension on English", preferred: "en-US-u-ca-gregory", available: ["en"], expected: "en"),
-                MatcherCase(name: "numeric extension singleton", preferred: "en-0-abc", available: ["en"], expected: "en"),
-                MatcherCase(name: "private-use extension is ignored", preferred: "en-US-x-private", available: ["en"], expected: "en"),
-                MatcherCase(name: "underscore normalization", preferred: "zh_CN", available: ["en", "zh-Hans"], expected: "zh-Hans"),
-                MatcherCase(name: "invalid preferred identifier", preferred: "1-invalid", available: ["en", "fr"], expected: "en"),
-                MatcherCase(name: "invalid preferred language", preferred: "x-private", available: ["en", "fr"], expected: "en"),
-                MatcherCase(name: "invalid candidates are ignored", preferred: "fr-FR", available: ["en", "!!!", "fr"], expected: "fr"),
-                MatcherCase(name: "variant package is not generic", preferred: "fr-FR", available: ["en", "fr-1901"], expected: "en"),
-                MatcherCase(name: "missing preferred identifier", preferred: nil, available: ["fr", "en"], expected: "en")
+                MatcherCase(name: "zh-Hans exact", preferred: ["zh-Hans"], available: ["en", "zh-Hans"], expected: "zh-Hans"),
+                MatcherCase(name: "zh-Hans-CN -> zh-Hans", preferred: ["zh-Hans-CN"], available: ["en", "zh-Hans"], expected: "zh-Hans"),
+                MatcherCase(name: "zh-CN -> zh-Hans", preferred: ["zh-CN"], available: ["en", "zh-Hans"], expected: "zh-Hans"),
+                MatcherCase(name: "zh-SG -> zh-Hans", preferred: ["zh-SG"], available: ["en", "zh-Hans"], expected: "zh-Hans"),
+                MatcherCase(name: "zh-Hant exact", preferred: ["zh-Hant"], available: ["en", "zh-Hant"], expected: "zh-Hant"),
+                MatcherCase(name: "zh-Hant -> en", preferred: ["zh-Hant"], available: ["en", "zh-Hans"], expected: "en"),
+                MatcherCase(name: "zh-TW -> en", preferred: ["zh-TW"], available: ["en", "zh-Hans"], expected: "en"),
+                MatcherCase(name: "zh-HK -> en", preferred: ["zh-HK"], available: ["en", "zh-Hans"], expected: "en"),
+                MatcherCase(name: "zh-MO -> en", preferred: ["zh-MO"], available: ["en", "zh-Hans"], expected: "en"),
+                MatcherCase(name: "en exact", preferred: ["en"], available: ["en"], expected: "en"),
+                MatcherCase(name: "en-US -> en", preferred: ["en-US"], available: ["en"], expected: "en"),
+                MatcherCase(name: "en-GB -> en", preferred: ["en-GB"], available: ["en"], expected: "en"),
+                MatcherCase(name: "fr exact", preferred: ["fr"], available: ["en", "fr"], expected: "fr"),
+                MatcherCase(name: "fr-FR -> fr", preferred: ["fr-FR"], available: ["en", "fr"], expected: "fr"),
+                MatcherCase(name: "pt exact", preferred: ["pt"], available: ["en", "pt"], expected: "pt"),
+                MatcherCase(name: "pt-PT exact match", preferred: ["pt-PT"], available: ["en", "pt-PT"], expected: "pt-PT"),
+                MatcherCase(name: "pt-BR uses generic pt", preferred: ["pt-BR"], available: ["en", "pt"], expected: "pt"),
+                MatcherCase(name: "Unicode extension is ignored", preferred: ["zh-CN-u-nu-hanidec"], available: ["en", "zh-Hans"], expected: "zh-Hans"),
+                MatcherCase(name: "Unicode extension on English", preferred: ["en-US-u-ca-gregory"], available: ["en"], expected: "en"),
+                MatcherCase(name: "numeric extension singleton", preferred: ["en-0-abc"], available: ["en"], expected: "en"),
+                MatcherCase(name: "private-use extension is ignored", preferred: ["en-US-x-private"], available: ["en"], expected: "en"),
+                MatcherCase(name: "underscore normalization", preferred: ["zh_CN"], available: ["en", "zh-Hans"], expected: "zh-Hans"),
+                MatcherCase(name: "invalid preferred identifier", preferred: ["1-invalid"], available: ["en", "fr"], expected: "en"),
+                MatcherCase(name: "invalid preferred language", preferred: ["x-private"], available: ["en", "fr"], expected: "en"),
+                MatcherCase(name: "invalid candidates are ignored", preferred: ["fr-FR"], available: ["en", "!!!", "fr"], expected: "fr"),
+                MatcherCase(name: "no preferences", preferred: [], available: ["fr", "en"], expected: "en"),
+                MatcherCase(name: "a later preference with a pack wins", preferred: ["fr-FR", "zh-Hans-CN", "en-US"], available: ["en", "zh-Hans"], expected: "zh-Hans"),
+                MatcherCase(name: "Traditional then Simplified", preferred: ["zh-Hant-TW", "zh-Hans-CN"], available: ["en", "zh-Hans"], expected: "zh-Hans"),
+                MatcherCase(name: "Traditional then English", preferred: ["zh-Hant-TW", "en-GB"], available: ["en", "zh-Hans"], expected: "en"),
+                MatcherCase(name: "an earlier English preference wins", preferred: ["en-US", "zh-Hans-CN"], available: ["en", "zh-Hans"], expected: "en"),
+                MatcherCase(name: "nothing supported", preferred: ["ja-JP", "ko-KR"], available: ["en", "zh-Hans"], expected: "en"),
+                MatcherCase(name: "Cantonese in Simplified script", preferred: ["yue-Hans-CN"], available: ["en", "zh-Hans"], expected: "zh-Hans")
             ]
             let packageIdentifiers = __PACKAGE_IDENTIFIERS__
 
             var failures: [String] = []
             for test in cases {
                 let actual = LanguageIdentifierMatcher.match(
-                    preferredIdentifier: test.preferred,
+                    preferredIdentifiers: test.preferred,
                     availableIdentifiers: test.available,
                     fallbackIdentifier: "en"
                 )
@@ -1366,7 +1386,7 @@ func runSelfTests(repositoryRoot: URL, report: inout ValidationReport) {
         )
         let parsed = try parser.parse()
         check(parsed.values["emoji"] == "😀", "UTF-16 surrogate pair was not decoded")
-        check(parsed.values["dash"] == "—", "four-digit \\U escape was not decoded")
+        check(parsed.values["dash"] == "\u{2014}", "four-digit \\U escape was not decoded")
         check(parsed.values["empty"]?.isEmpty == true, "empty .strings value was not retained")
     } catch {
         report.fail("self-test: Unicode .strings fixture failed to parse: \(error)")
@@ -1376,6 +1396,22 @@ func runSelfTests(repositoryRoot: URL, report: inout ValidationReport) {
         decodeStringsSource(utf16Source.data(using: .utf16)!) == utf16Source,
         "UTF-16 .strings data was not decoded"
     )
+
+    // Foundation leaves a lowercase \u alone, so the app would show the raw
+    // text. The validator must report the value instead of trusting its parser.
+    let divergentURL = fileManager.temporaryDirectory
+        .appendingPathComponent("tactile-divergent-\(UUID().uuidString).strings")
+    if (try? Data("\"k\" = \"\\u0025d\";".utf8).write(to: divergentURL)) != nil {
+        defer { try? fileManager.removeItem(at: divergentURL) }
+        var divergentReport = ValidationReport()
+        _ = loadStrings(at: divergentURL, report: &divergentReport, packageID: "self-test")
+        check(
+            divergentReport.failures.contains { $0.contains("decodes differently at runtime") },
+            "an escape Foundation decodes differently was not reported"
+        )
+    } else {
+        report.fail("self-test: unable to write the escape fixture")
+    }
 
     do {
         var parser = StringsParser(source: "\"broken\" = \"unterminated;\n")

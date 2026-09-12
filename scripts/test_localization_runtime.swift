@@ -28,8 +28,19 @@ struct LocalizationRuntimeTests {
         expect(en.plural("waveform.pulse-count", count: 10) == "10 pulses", "English many")
         expect(zh.plural("waveform.pulse-count", count: 1) == "1 个脉冲", "Chinese singular")
         expect(zh.plural("waveform.pulse-count", count: 2) == "2 个脉冲", "Chinese plural")
+        expect(en.plural("format.lines", count: 1) == "1 line", "English singular line")
+        expect(en.plural("format.lines", count: 3) == "3 lines", "English plural lines")
+        expect(zh.plural("format.lines", count: 1) == "1 行", "Chinese lines")
         expect(zh.format("feedback.hover-caption.with-label", "Save", zh.string("feedback.category.button.caption"))
                == "Save · 按钮", "External label remains verbatim")
+        expect(en.format("a11y.waveform.edit", "Buttons") == "Edit waveform for Buttons",
+               "English edit label names the waveform")
+        expect(en.format("a11y.waveform.try", "Links") == "Try waveform for Links",
+               "English try label names the waveform")
+        expect(en.string("a11y.menu-bar.permission-needed").hasPrefix("Tactile"),
+               "Menu bar label names the app")
+        expect(zh.string("settings.playground.buttons.delete").lowercased().contains("delete"),
+               "Chinese Playground Delete keeps the English danger word")
 
         // Fixtures are independent of the user's preferences and app bundle.
         let fixture = FileManager.default.temporaryDirectory
@@ -50,11 +61,11 @@ struct LocalizationRuntimeTests {
         try addPack("en", ["language.pack.display-name": "English", "missing": "Fallback",
                            "blank": "Not blank", "spacing": " English ", "format": "%d %@",
                            "reorder": "%d %@", "escaped": "%d%% %@", "star": "%*.*f",
-                           "malformed": "%d %@"])
+                           "malformed": "%d %@", "reuse": "%@"])
         try addPack("fr", ["language.pack.display-name": "Français", "blank": "  ",
                            "spacing": " Français ", "format": "%1$@ %2$d",
                            "reorder": "%2$@ %1$d", "escaped": "%1$d%% %2$@",
-                           "star": "%3$*1$.*2$f", "malformed": "%Q"])
+                           "star": "%3$*1$.*2$f", "malformed": "%Q", "reuse": "%1$@ (%1$@)"])
         try addPack("de", ["unrelated": "Missing display name"])
         try addPack("it", nil)
         try addPack("bad--tag", ["language.pack.display-name": "Invalid"])
@@ -80,15 +91,24 @@ struct LocalizationRuntimeTests {
         expect(french.format("reorder", 7, "items") == "items 7", "Safe argument reordering")
         expect(french.format("escaped", 7, "items") == "7% items", "Escaped percent")
         expect(french.format("malformed", 7, "items") == "7 items", "Malformed translation falls back safely")
+        expect(french.format("reuse", "x") == "x (x)", "A repeated positional argument is a valid translation")
         expect(french.format("star", 5, 2, 1.5).contains("1,50"), "Width/precision and explicit locale")
         expect(french.plural("waveform.pulse-count", count: 1) == "1 pulse", "Incompatible plural falls back to English")
-        expect(registry.resolve(selection: .system, systemIdentifier: "fr-FR").identifier == "fr", "Future generic French pack")
-        expect(registry.resolve(selection: .system, systemIdentifier: "ja-JP").identifier == "en", "Unsupported system language")
-        expect(registry.resolve(selection: .pack(identifier: "removed"), systemIdentifier: "fr-FR").identifier == "en", "Removed pack fallback")
+        expect(registry.resolve(selection: .system, preferredLanguages: ["fr-FR"]).identifier == "fr",
+               "Future generic French pack")
+        expect(registry.resolve(selection: .system, preferredLanguages: ["ja-JP"]).identifier == "en",
+               "Unsupported system language")
+        expect(registry.resolve(selection: .system, preferredLanguages: ["ja-JP", "fr-FR"]).identifier == "fr",
+               "A later preference with a pack wins, as in AppKit")
+        expect(registry.resolve(selection: .system, preferredLanguages: []).identifier == "en",
+               "No preferences falls back to English")
+        expect(registry.resolve(selection: .pack(identifier: "removed"), preferredLanguages: ["fr-FR"]).identifier == "en",
+               "Removed pack fallback")
         expect(LanguageSelection(storageValue: "system") == .system, "System preference decoding")
         expect(LanguageSelection(storageValue: "pack:EN_us").storageValue == "pack:en-US", "Preference normalization")
         expect(LanguageIdentifierMatcher.normalize("de-1901-1901") == nil, "Duplicate variants rejected")
-        expect(LanguageIdentifierMatcher.match(preferredIdentifier: "en-US", availableIdentifiers: ["en-oxendict", "fr"], fallbackIdentifier: "en") == "en", "Variant is not a generic language pack")
+        expect(LanguageIdentifierMatcher.match(preferredIdentifiers: ["en-US"], availableIdentifiers: ["en-oxendict", "fr"],
+                                               fallbackIdentifier: "en") == "en", "Variant is not a generic language pack")
         print("PASS: \(checks) production localization runtime checks; process locale: \(Locale.current.identifier)")
     }
 }

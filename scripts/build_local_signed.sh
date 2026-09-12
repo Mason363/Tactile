@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 TACTILE_REPOSITORY=$(pwd)
-export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
+export DEVELOPER_DIR="${DEVELOPER_DIR:-$(xcode-select -p)}"
 TACTILE_SIGNED_BUILD_ROOT="${TACTILE_SIGNED_BUILD_ROOT:-$TACTILE_REPOSITORY/build/local-signed}"
 
 # Keep machine-specific certificate names, hashes, and team IDs out of source
