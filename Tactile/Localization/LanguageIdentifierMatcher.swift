@@ -1,35 +1,6 @@
 import Foundation
 
 nonisolated enum LanguageIdentifierMatcher {
-    private struct Tag {
-        let identifier: String
-        let language: String
-        let likelyScript: String?
-        let likelyRegion: String?
-        let explicitScript: String?
-        let explicitRegion: String?
-
-        init?(_ rawIdentifier: String) {
-            guard let identifier = LanguageIdentifierMatcher.normalize(rawIdentifier) else { return nil }
-            let tokens = identifier.split(separator: "-").map(String.init)
-            guard let first = tokens.first else { return nil }
-
-            self.identifier = identifier
-            language = first.lowercased()
-            explicitScript = tokens.dropFirst().first(where: {
-                $0.count == 4 && $0.unicodeScalars.allSatisfy(CharacterSet.letters.contains)
-            })
-            explicitRegion = tokens.dropFirst().first(where: {
-                ($0.count == 2 && $0.unicodeScalars.allSatisfy(CharacterSet.letters.contains))
-                    || ($0.count == 3 && $0.unicodeScalars.allSatisfy(CharacterSet.decimalDigits.contains))
-            })
-
-            let language = Locale.Language(identifier: identifier)
-            likelyScript = language.script?.identifier
-            likelyRegion = language.region?.identifier
-        }
-    }
-
     static func normalize(_ rawIdentifier: String) -> String? {
         let replaced = rawIdentifier.replacingOccurrences(of: "_", with: "-")
         guard !replaced.hasPrefix("-"), !replaced.hasSuffix("-"), !replaced.contains("--") else {
@@ -135,48 +106,29 @@ nonisolated enum LanguageIdentifierMatcher {
         }
     }
 
+    /// Picks the pack macOS itself would choose for these preferences:
+    /// Foundation's bundle-localization matching over the whole list, the
+    /// rule AppKit, file panels, and Sparkle follow, so Tactile shows the same
+    /// language as the system UI around it. Scripts stay apart (zh-Hant never
+    /// borrows zh-Hans); an unmatched list gets the fallback.
     static func match(
-        preferredIdentifier: String?,
+        preferredIdentifiers: [String],
         availableIdentifiers: [String],
         fallbackIdentifier: String
     ) -> String {
         let fallback = normalize(fallbackIdentifier) ?? fallbackIdentifier
-        guard let preferredIdentifier, let preferred = Tag(preferredIdentifier) else { return fallback }
-        let candidates = availableIdentifiers.compactMap(Tag.init)
-
-        if let exact = candidates.first(where: { $0.identifier == preferred.identifier }) {
-            return exact.identifier
+        var available: [String] = []
+        for identifier in availableIdentifiers.compactMap(normalize) where !available.contains(identifier) {
+            available.append(identifier)
         }
+        let preferences = preferredIdentifiers.compactMap(normalize)
+        guard !available.isEmpty, !preferences.isEmpty else { return fallback }
 
-        let ranked = candidates.compactMap { candidate -> (Tag, Int)? in
-            guard candidate.language == preferred.language else { return nil }
-            // A variant/extlang-specific package is not a generic package.
-            // Such packages are selected only by the exact match above.
-            let baseCount = 1 + (candidate.explicitScript == nil ? 0 : 1)
-                + (candidate.explicitRegion == nil ? 0 : 1)
-            guard candidate.identifier.split(separator: "-").count == baseCount else { return nil }
-            if let candidateScript = candidate.explicitScript,
-               candidateScript.caseInsensitiveCompare(preferred.likelyScript ?? "") != .orderedSame {
-                return nil
-            }
-            if let candidateRegion = candidate.explicitRegion,
-               candidateRegion.caseInsensitiveCompare(preferred.likelyRegion ?? "") != .orderedSame {
-                return nil
-            }
-
-            let score: Int
-            switch (candidate.explicitScript, candidate.explicitRegion) {
-            case (.some, .some): score = 900
-            case (.some, .none): score = 800
-            case (.none, .some): score = 700
-            case (.none, .none): score = 600
-            }
-            return (candidate, score)
-        }
-        .sorted {
-            $0.1 == $1.1 ? $0.0.identifier < $1.0.identifier : $0.1 > $1.1
-        }
-
-        return ranked.first?.0.identifier ?? fallback
+        // The fallback is always a candidate, so an unmatched list lands on it.
+        let candidates = [fallback] + available.filter { $0 != fallback }
+        guard let chosen = Bundle.preferredLocalizations(from: candidates, forPreferences: preferences).first,
+              available.contains(chosen)
+        else { return fallback }
+        return chosen
     }
 }

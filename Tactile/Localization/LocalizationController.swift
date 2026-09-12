@@ -17,7 +17,7 @@ final class LocalizationController: ObservableObject {
         self.registry = registry
         resolvedPack = registry.resolve(
             selection: settings.languageSelection,
-            systemIdentifier: Locale.preferredLanguages.first
+            preferredLanguages: Locale.preferredLanguages
         )
 
         settings.$languageSelection
@@ -59,7 +59,7 @@ final class LocalizationController: ObservableObject {
     private func resolve(_ selection: LanguageSelection) {
         let next = registry.resolve(
             selection: selection,
-            systemIdentifier: Locale.preferredLanguages.first
+            preferredLanguages: Locale.preferredLanguages
         )
         if next.identifier != resolvedPack.identifier || next.bundle.bundlePath != resolvedPack.bundle.bundlePath {
             resolvedPack = next

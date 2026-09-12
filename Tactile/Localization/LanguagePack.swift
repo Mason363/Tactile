@@ -66,26 +66,14 @@ final class LanguagePackRegistry {
 
     private let appBundle: Bundle
     private(set) var packs: [LanguagePack] = []
+    /// The English baseline, resolved once per discovery pass. A synthetic
+    /// pack stands in when the bundle ships no English table.
+    private(set) var englishPack: LanguagePack
 
     init(bundle: Bundle = .main) {
         appBundle = bundle
+        englishPack = Self.syntheticEnglishPack(in: bundle)
         reload()
-    }
-
-    var englishPack: LanguagePack {
-        if let pack = pack(identifier: Self.fallbackIdentifier) {
-            return pack
-        }
-        let locale = Locale(identifier: Self.fallbackIdentifier)
-        let name = locale.localizedString(forIdentifier: Self.fallbackIdentifier)
-            ?? Self.fallbackIdentifier
-        return LanguagePack(
-            identifier: Self.fallbackIdentifier,
-            locale: locale,
-            nativeDisplayName: name,
-            bundle: appBundle,
-            isSyntheticFallback: true
-        )
     }
 
     func reload() {
@@ -135,6 +123,8 @@ final class LanguagePackRegistry {
                 ? $0.identifier < $1.identifier
                 : comparison == .orderedAscending
         }
+        englishPack = pack(identifier: Self.fallbackIdentifier)
+            ?? Self.syntheticEnglishPack(in: appBundle)
     }
 
     func pack(identifier: String) -> LanguagePack? {
@@ -142,11 +132,16 @@ final class LanguagePackRegistry {
         return packs.first { $0.identifier == normalized }
     }
 
-    func resolve(selection: LanguageSelection, systemIdentifier: String?) -> LanguagePack {
+    /// `.system` applies the rule AppKit uses for the app bundle to the
+    /// user's whole preferred-language list, so Tactile's strings match the
+    /// system panels, menus, and Sparkle around them. AppKit settles its
+    /// choice at launch, so a live change to the list can differ until the
+    /// next launch.
+    func resolve(selection: LanguageSelection, preferredLanguages: [String]) -> LanguagePack {
         switch selection {
         case .system:
             let identifier = LanguageIdentifierMatcher.match(
-                preferredIdentifier: systemIdentifier,
+                preferredIdentifiers: preferredLanguages,
                 availableIdentifiers: packs.map(\.identifier),
                 fallbackIdentifier: Self.fallbackIdentifier
             )
@@ -155,18 +150,39 @@ final class LanguagePackRegistry {
             return pack(identifier: identifier) ?? englishPack
         }
     }
+
+    private static func syntheticEnglishPack(in bundle: Bundle) -> LanguagePack {
+        let locale = Locale(identifier: fallbackIdentifier)
+        let name = locale.localizedString(forIdentifier: fallbackIdentifier) ?? fallbackIdentifier
+        return LanguagePack(
+            identifier: fallbackIdentifier,
+            locale: locale,
+            nativeDisplayName: name,
+            bundle: bundle,
+            isSyntheticFallback: true
+        )
+    }
 }
 
 struct Localizer {
     let pack: LanguagePack
     let fallback: LanguagePack
 
+    /// Compiled once: every `format` call validates its placeholders.
+    private static let placeholderExpression = try! NSRegularExpression(
+        pattern: #"%(?:([1-9][0-9]*)\$)?[-+#0 ']*(\*(?:[1-9][0-9]*\$)?|[0-9]+)?(?:\.(\*(?:[1-9][0-9]*\$)?|[0-9]+))?(hh|h|ll|l|q|z|t|j|L)?([@diuoxXfFeEgGaAcCsSp])"#
+    )
+    private static let pluralVariableExpression = try! NSRegularExpression(
+        pattern: #"%#@([A-Za-z][A-Za-z0-9_-]*)@"#
+    )
+    /// Parsed stringsdict tables by bundle path. Bundled resources never
+    /// change while the app runs, so each table is read from disk once.
+    private static var stringsDictTables: [String: [String: Any]] = [:]
+
     func string(_ key: String, defaultValue: String? = nil) -> String {
-        let emergency = defaultValue ?? key
-        let english = fallback.isSyntheticFallback
-            ? emergency
-            : lookup(key, in: fallback.bundle, fallback: emergency)
-        return pack.isSyntheticFallback ? english : lookup(key, in: pack.bundle, fallback: english)
+        if !pack.isSyntheticFallback, let value = storedValue(key, in: pack.bundle) { return value }
+        if !fallback.isSyntheticFallback, let value = storedValue(key, in: fallback.bundle) { return value }
+        return defaultValue ?? key
     }
 
     func format(_ key: String, defaultValue: String? = nil, arguments: [CVarArg]) -> String {
@@ -214,15 +230,24 @@ struct Localizer {
         return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallback : value
     }
 
+    /// The table's value for `key`, or nil when it is missing or blank.
+    private func storedValue(_ key: String, in bundle: Bundle) -> String? {
+        let missing = "\u{FFFF}missing"
+        let value = bundle.localizedString(forKey: key, value: missing, table: nil)
+        guard value != missing,
+              !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return value
+    }
+
     private func placeholderSignature(in format: String) -> [String]? {
-        let pattern = #"%(?:([1-9][0-9]*)\$)?[-+#0 ']*(\*(?:[1-9][0-9]*\$)?|[0-9]+)?(?:\.(\*(?:[1-9][0-9]*\$)?|[0-9]+))?(hh|h|ll|l|q|z|t|j|L)?([@diuoxXfFeEgGaAcCsSp])"#
-        guard let expression = try? NSRegularExpression(pattern: pattern) else { return nil }
         let source = format as NSString
         var cursor = 0
         var nextArgument = 1
         var usedPositional = false
         var usedSequential = false
-        var signature: [String] = []
+        var conflicting = false
+        var types: [Int: String] = [:]
 
         func record(_ position: Int?, type: String) {
             let index: Int
@@ -234,7 +259,10 @@ struct Localizer {
                 nextArgument += 1
                 usedSequential = true
             }
-            signature.append("\(index):\(type)")
+            // A positional argument may be printed more than once, but it
+            // must keep one type.
+            if let existing = types[index], existing != type { conflicting = true }
+            types[index] = type
         }
 
         while cursor < source.length {
@@ -243,7 +271,7 @@ struct Localizer {
                 cursor += 2
                 continue
             }
-            guard let match = expression.firstMatch(
+            guard let match = Self.placeholderExpression.firstMatch(
                 in: format, options: .anchored,
                 range: NSRange(location: cursor, length: source.length - cursor)
             ) else { return nil }
@@ -267,15 +295,13 @@ struct Localizer {
             record(Int(group(1)), type: type)
             cursor = NSMaxRange(match.range)
         }
-        guard !(usedPositional && usedSequential) else { return nil }
-        return signature.sorted()
+        guard !conflicting, !(usedPositional && usedSequential) else { return nil }
+        return types.map { "\($0.key):\($0.value)" }.sorted()
     }
 
     private func pluralVariableSignature(in format: String) -> [String] {
-        let pattern = #"%#@([A-Za-z][A-Za-z0-9_-]*)@"#
-        guard let expression = try? NSRegularExpression(pattern: pattern) else { return [] }
         let range = NSRange(format.startIndex..<format.endIndex, in: format)
-        return expression.matches(in: format, range: range).compactMap {
+        return Self.pluralVariableExpression.matches(in: format, range: range).compactMap {
             guard $0.numberOfRanges > 1,
                   let swiftRange = Range($0.range(at: 1), in: format)
             else { return nil }
@@ -295,11 +321,20 @@ struct Localizer {
         let specifications: [Variable]
     }
 
-    private func pluralEntrySignature(forKey key: String, in bundle: Bundle) -> PluralEntrySignature? {
+    private func stringsDictTable(in bundle: Bundle) -> [String: Any]? {
+        if let table = Self.stringsDictTables[bundle.bundlePath] { return table }
         guard let url = bundle.url(forResource: "Localizable", withExtension: "stringsdict"),
               let data = try? Data(contentsOf: url),
-              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
-              let root = plist as? [String: Any],
+              let table = (try? PropertyListSerialization.propertyList(
+                  from: data, options: [], format: nil
+              )) as? [String: Any]
+        else { return nil }
+        Self.stringsDictTables[bundle.bundlePath] = table
+        return table
+    }
+
+    private func pluralEntrySignature(forKey key: String, in bundle: Bundle) -> PluralEntrySignature? {
+        guard let root = stringsDictTable(in: bundle),
               let entry = root[key] as? [String: Any],
               let localizedFormat = entry["NSStringLocalizedFormatKey"] as? String
         else { return nil }
