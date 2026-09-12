@@ -22,6 +22,19 @@
         5. Set SUPublicEDKey in Info.plist to the matching public key.
     -->
     <item>
+      <title>Tactile 1.1.0</title>
+      <pubDate>Sat, 12 Sep 2026 00:00:00 +0000</pubDate>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <sparkle:minimumAutoupdateVersion>4</sparkle:minimumAutoupdateVersion>
+      <description><![CDATA[<p>Tactile now speaks Simplified Chinese (简体中文). Pick a language in Settings, General, or keep System to follow your Mac. Thanks to DTW7607 for the translation.</p>]]></description>
+      <enclosure url="https://github.com/Mason363/Tactile/releases/download/v1.1.0/Tactile-1.1.0.zip"
+                 sparkle:version="6"
+                 sparkle:shortVersionString="1.1.0"
+                 length="3319050"
+                 sparkle:edSignature="mHHbJ93SkFwSe0nP+qX1a9SGjhdaaNsRXvOVYaNXoegp1cDVam9UguDsfmsMf5VlIZdChsrr7RiA0kaszt7/Bg=="
+                 type="application/octet-stream" />
+    </item>
+    <item>
       <title>Tactile 1.0.4</title>
       <pubDate>Mon, 13 Jul 2026 00:00:00 +0000</pubDate>
       <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
