@@ -25,6 +25,13 @@ final class AppController: ObservableObject {
     private let feedback: FeedbackController
     private let bridge = BrowserBridgeServer()
     private let indicator = HoverIndicator()
+    /// Who plays and records audio: feeds sound alerts and music haptics.
+    private let audioClients = AudioProcessMonitor()
+    /// Feel the music. Exposed for the Music pane's live readout.
+    let music = MusicHaptics()
+    private let soundAlerts = SoundAlertCenter()
+    private let notifications = NotificationBannerWatcher()
+    private let charger = PowerSourceWatcher()
 
     @Published private(set) var isActive = false
     @Published private(set) var pausedUntil: Date?
@@ -80,6 +87,8 @@ final class AppController: ObservableObject {
         }
         feedback.onFire = { [weak self] in
             self?.indicator.flashFire()
+            // Music pulses never land on top of an interface tick.
+            self?.music.interfaceTapped()
         }
         cursorMonitor.onClick = { [weak self] point in
             // Clicks change the UI under the cursor (menus open, pages
@@ -118,6 +127,37 @@ final class AppController: ObservableObject {
                 self.feedback.reset()
             }
         }
+
+        // Sounds you might not hear, felt instead: an app starting to play,
+        // a notification banner, the charger connecting.
+        audioClients.onChange = { [weak self] in
+            guard let self else { return }
+            self.soundAlerts.update(playing: self.audioClients.playing)
+            self.music.clientsChanged(playing: self.audioClients.playing, recording: self.audioClients.recording)
+        }
+        soundAlerts.fire = { [weak self] waveform in
+            self?.feedback.alertFire(waveform)
+        }
+        notifications.onBanner = { [weak self] in
+            guard let self else { return }
+            self.feedback.alertFire(self.settings.notificationWaveform)
+        }
+        charger.onChargerConnected = { [weak self] in
+            guard let self else { return }
+            self.feedback.alertFire(self.settings.chargerWaveform)
+        }
+        // A Coast phone arriving or leaving moves where the music is felt.
+        PhoneHapticEngine.shared.$phoneName
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.updateMusic() }
+            .store(in: &cancellables)
+        // Back from System Settings, the audio permission may have changed.
+        NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.music.refreshPermission() }
+            .store(in: &cancellables)
 
         settings.objectWillChange
             .receive(on: DispatchQueue.main)
@@ -208,6 +248,63 @@ final class AppController: ObservableObject {
         updateBridge()
         updateIndicator()
         updateKeyboardMonitor()
+        updateAlerts()
+        updateMusic()
+    }
+
+    /// Runs each alert source only while it's on and the pipeline runs.
+    /// None of them costs anything between events.
+    private func updateAlerts() {
+        soundAlerts.configuration = SoundAlertCenter.Configuration(
+            enabled: settings.soundAlertsEnabled,
+            rules: settings.soundAlertRules,
+            otherApps: settings.soundAlertOtherApps,
+            otherAppsWaveform: settings.soundAlertOtherAppsWaveform,
+            skipFrontmost: settings.soundAlertSkipFrontmost
+        )
+        // The client monitor feeds both sound alerts and music haptics.
+        let wantsClients = isActive && (settings.soundAlertsEnabled || settings.musicHapticsEnabled)
+        if wantsClients, !audioClients.isRunning {
+            soundAlerts.reset()
+            audioClients.start()
+        } else if !wantsClients, audioClients.isRunning {
+            audioClients.stop()
+            soundAlerts.reset()
+            music.clientsChanged(playing: [], recording: [])
+        }
+        let wantsNotifications = isActive && settings.notificationHapticsEnabled
+        if wantsNotifications, !notifications.isRunning {
+            notifications.start()
+        } else if !wantsNotifications, notifications.isRunning {
+            notifications.stop()
+        }
+        let wantsCharger = isActive && settings.chargerHapticsEnabled
+        if wantsCharger, !charger.isRunning {
+            charger.start()
+        } else if !wantsCharger, charger.isRunning {
+            charger.stop()
+        }
+    }
+
+    /// Music haptics follows the settings, the pipeline state, and the
+    /// device choice (a trackpad, all of them, or the Coast phone).
+    private func updateMusic() {
+        music.update(
+            MusicHaptics.Configuration(
+                enabled: settings.musicHapticsEnabled,
+                intensity: settings.musicIntensity,
+                texture: settings.musicTexture,
+                pauseWhileNavigating: settings.musicPauseWhileNavigating,
+                pauseDuringCalls: settings.musicPauseDuringCalls,
+                syncOffsetMs: settings.musicSyncOffsetMs
+            ),
+            pulser: .current(device: settings.hapticDevice, enhanced: settings.useEnhancedHaptics),
+            pipelineActive: isActive
+        )
+        // Cursor activity rests the music; no hook at all when it's off.
+        cursorMonitor.onActivity = isActive && settings.musicHapticsEnabled
+            ? { [weak self] in self?.music.cursorMoved() }
+            : nil
     }
 
     /// Runs the key monitor only while the pipeline is active and the feature
@@ -265,6 +362,9 @@ final class AppController: ObservableObject {
         bridge.stop()
         PhoneHapticEngine.shared.stop()
         indicator.hideAll()
+        // isActive is already false: these tear down.
+        updateAlerts()
+        updateMusic()
     }
 
     // MARK: - Browser bridge
@@ -311,6 +411,7 @@ final class AppController: ObservableObject {
             // Left the browser: forget any half-entered web element.
             feedback.reset()
         }
+        soundAlerts.frontmostChanged(to: bundleID)
         applyPerAppProfile(for: bundleID)
     }
 

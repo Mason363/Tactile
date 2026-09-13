@@ -1,0 +1,2 @@
+/* Shown in the System Audio Recording prompt when music haptics is turned on. */
+"NSAudioCaptureUsageDescription" = "Tactile 会聆听 Mac 播放的内容，让触控板也能演奏出来，让你感受音乐。音频仅在此 Mac 上实时分析，绝不会被录制或发送到任何地方。";

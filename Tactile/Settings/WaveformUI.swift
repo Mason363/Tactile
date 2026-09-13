@@ -29,6 +29,65 @@ enum HapticPreview {
     }
 }
 
+/// Makes one step a held note instead of a tap, with its pitch and length.
+/// The trackpad's motor sounds a pitch only through the actuator; the phone
+/// and the public engine fall back to a tap of the same strength.
+struct NoteControls: View {
+    @Binding var step: WaveformStep
+
+    @EnvironmentObject private var localization: LocalizationController
+
+    var body: some View {
+        let localizer = localization.localizer
+        HStack(spacing: 8) {
+            Toggle(localizer.string("waveform.note"), isOn: isNote)
+                .toggleStyle(.checkbox)
+                .accessibilityLabel(Text(verbatim: localizer.string("waveform.tap-or-note")))
+
+            if step.isTone {
+                Text(verbatim: localizer.string("waveform.pitch"))
+                    .foregroundStyle(.secondary)
+                Slider(value: pitch, in: 90...500, step: 5)
+                    .accessibilityLabel(Text(verbatim: localizer.string("waveform.pitch")))
+                Text(verbatim: localizer.format("format.settings.vibration.hz", arguments: [Int(step.hz ?? 200)]))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(width: 56, alignment: .trailing)
+
+                Text(verbatim: localizer.string("waveform.length"))
+                    .foregroundStyle(.secondary)
+                Slider(value: length, in: 40...400, step: 10)
+                    .accessibilityLabel(Text(verbatim: localizer.string("waveform.length")))
+                Text(verbatim: localizer.format("format.waveform.duration-ms", arguments: [Int(step.toneMs ?? 120)]))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                    .frame(width: 56, alignment: .trailing)
+            } else {
+                Spacer()
+            }
+        }
+        .font(.caption)
+    }
+
+    private var isNote: Binding<Bool> {
+        Binding(
+            get: { step.isTone },
+            set: { on in
+                step.hz = on ? (step.hz ?? 200) : nil
+                step.toneMs = on ? (step.toneMs ?? 120) : nil
+            }
+        )
+    }
+
+    private var pitch: Binding<Double> {
+        Binding(get: { step.hz ?? 200 }, set: { step.hz = $0 })
+    }
+
+    private var length: Binding<Double> {
+        Binding(get: { step.toneMs ?? 120 }, set: { step.toneMs = $0 })
+    }
+}
+
 private enum WaveformChoice: Hashable {
     case preset(WaveformPreset)
     case saved(UUID)
@@ -135,6 +194,7 @@ struct WaveformEditorView: View {
 
             List {
                 ForEach($waveform.steps) { $step in
+                    VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Picker(localization.localizer.string("waveform.strength"), selection: $step.strength) {
                             ForEach(FeedbackPattern.allCases) { pattern in
@@ -170,6 +230,8 @@ struct WaveformEditorView: View {
                         .accessibilityLabel(Text(verbatim: localization.localizer.string(
                             "a11y.waveform.remove-pulse"
                         )))
+                    }
+                    NoteControls(step: $step)
                     }
                 }
             }

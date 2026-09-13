@@ -47,6 +47,9 @@ struct MenuBarView: View {
             .disabled(!settings.isEnabled || !permission.isTrusted)
         }
 
+        Toggle(localization.localizer.string("menu.feel-music"), isOn: $settings.musicHapticsEnabled)
+            .disabled(!settings.isEnabled || !permission.isTrusted)
+
         Divider()
 
         if !settings.profiles.isEmpty {

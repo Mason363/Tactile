@@ -26,7 +26,11 @@ final class ActuatorHapticEngine: FeedbackEngine {
 
     private typealias CreateFunc = @convention(c) (UInt64) -> UnsafeMutableRawPointer?
     private typealias OpenCloseFunc = @convention(c) (UnsafeMutableRawPointer) -> Int32
-    private typealias ActuateFunc = @convention(c) (UnsafeMutableRawPointer, Int32, UInt32, Float, Float) -> Int32
+    /// Actuator, actuation ID, level flags, strength scale, and duration scale
+    /// (0 leaves either scale at the waveform's own value).
+    fileprivate typealias ActuateFunc = @convention(c) (UnsafeMutableRawPointer, Int32, UInt32, Float, Float) -> Int32
+    fileprivate typealias CreateActuationFunc = @convention(c) (CFDictionary, Int32) -> UnsafeMutableRawPointer?
+    fileprivate typealias PlayActuationFunc = @convention(c) (UnsafeMutableRawPointer, UnsafeMutableRawPointer, UInt32, Float, Float) -> Int32
     private typealias DeviceListFunc = @convention(c) () -> Unmanaged<CFArray>?
     private typealias DeviceIDFunc = @convention(c) (UnsafeMutableRawPointer, UnsafeMutablePointer<UInt64>) -> Int32
     private typealias DeviceBoolFunc = @convention(c) (UnsafeMutableRawPointer) -> Bool
@@ -63,6 +67,8 @@ final class ActuatorHapticEngine: FeedbackEngine {
     private let listDevices: DeviceListFunc?
     private let getDeviceID: DeviceIDFunc?
     private let deviceIsBuiltIn: DeviceBoolFunc?
+    private let playActuation: PlayActuationFunc?
+    private let createActuation: CreateActuationFunc?
 
     private init?() {
         let path = "/System/Library/PrivateFrameworks/MultitouchSupport.framework/MultitouchSupport"
@@ -81,6 +87,11 @@ final class ActuatorHapticEngine: FeedbackEngine {
         listDevices = dlsym(handle, "MTDeviceCreateList").map { unsafeBitCast($0, to: DeviceListFunc.self) }
         getDeviceID = dlsym(handle, "MTDeviceGetDeviceID").map { unsafeBitCast($0, to: DeviceIDFunc.self) }
         deviceIsBuiltIn = dlsym(handle, "MTDeviceIsBuiltIn").map { unsafeBitCast($0, to: DeviceBoolFunc.self) }
+        // Parametric waveforms, described the way the trackpad's own clicks
+        // are. They are what lets music be played as sound rather than as
+        // clicks; without them music falls back to the stock clicks.
+        playActuation = dlsym(handle, "MTActuationActuate").map { unsafeBitCast($0, to: PlayActuationFunc.self) }
+        createActuation = dlsym(handle, "MTActuationCreateFromDictionary").map { unsafeBitCast($0, to: CreateActuationFunc.self) }
 
         refreshDevices()
         if devices.isEmpty, let actuator = create(Self.legacyDeviceID) {
@@ -166,39 +177,141 @@ final class ActuatorHapticEngine: FeedbackEngine {
         }
     }
 
-    // MARK: - Continuous buzz
+    // MARK: - Pulses from any thread
 
-    /// Runs the actuator fast enough that individual pulses blur into a
-    /// continuous vibration - main-thread timers can't hold a steady beat
-    /// below ~30ms, so the pulse loop gets its own thread with a hard floor
-    /// of 4ms (250 pulses/sec). Power and thermals stay inside the driver's
-    /// own limits: each call plays the same predefined waveform the system
-    /// uses for its haptics, just scheduled back-to-back.
-    func startBuzz(_ pattern: FeedbackPattern, gaps: [TimeInterval]) {
-        let microseconds = gaps.map { UInt32(max($0, 0.004) * 1_000_000) }
-        buzzer.start(actuators: targetActuators, actuate: actuate, id: pattern.actuationID, gaps: microseconds)
+    /// The current target's actuators, able to pulse from any thread: music
+    /// haptics play from their own timing thread, where a main-thread hop
+    /// would add jitter. Take a new one when the target changes; actuators
+    /// are never closed, so a snapshot can't outlive its handles.
+    nonisolated struct Pulser: @unchecked Sendable {
+        fileprivate let actuators: [UnsafeMutableRawPointer]
+        fileprivate let actuate: ActuateFunc
+        fileprivate let play: PlayActuationFunc?
+        fileprivate let create: CreateActuationFunc?
+
+        /// Whether this pulser can play the music itself (it needs the
+        /// parametric waveforms) rather than only discrete taps.
+        var canVibrate: Bool { create != nil && play != nil }
+
+        /// One segment of the trackpad playing the music: its partials
+        /// sounded together as one waveform, at `level` 0...1 of full
+        /// amplitude. The segment is a whole number of the lead partial's
+        /// cycles, so sending them end to end runs without a seam.
+        func chord(_ chord: Chord, level: Float) {
+            guard let create, let play, level > 0, !chord.partials.isEmpty else { return }
+            let milliseconds = Double(chord.lengthTicks) / 24
+            let tones = chord.partials.map { partial in
+                ["Type": "Sine", "Amplitude": Double(partial.amplitude), "DurationMS": milliseconds,
+                 "DelayMS": 0.0, "FrequencykHz": Double(partial.hz) / 1000] as [String: Any]
+            }
+            let shape: [String: Any] = [
+                // A silent Gaussian base: the driver plays tones only on one.
+                "BaseWaveform": ["Type": "Gaussian", "Amplitude": 0.0, "DurationMS": milliseconds],
+                "Tones": tones,
+            ]
+            guard let actuation = create(shape as CFDictionary, 0) else { return }
+            let scale = SpeakerVoice.ceiling * min(level, 1)
+            for actuator in actuators {
+                _ = play(actuation, actuator, 0, scale, 0)
+            }
+            Unmanaged<AnyObject>.fromOpaque(actuation).release()
+        }
+
+        /// A music accent for the fallback path, when the parametric
+        /// waveforms are missing (an old macOS): the stock strong click,
+        /// scaled. `weight` is ignored here.
+        func accent(strength: Float, weight: Float) {
+            let scale = 0.35 + 0.95 * min(max(strength, 0), 1)
+            for actuator in actuators {
+                _ = actuate(actuator, 6, 0, scale, 0)
+            }
+        }
     }
 
-    func stopBuzz() {
-        buzzer.stop()
+    func makePulser() -> Pulser {
+        Pulser(actuators: targetActuators, actuate: actuate, play: playActuation, create: createActuation)
     }
 
-    private let buzzer = Buzzer()
+    // MARK: - Held tones
 
-    /// The pulse loop. Generation counting makes stop/start race-free: the
-    /// thread re-checks the generation before every pulse and exits the
-    /// moment it's stale.
-    private final class Buzzer {
+    /// Holds a note on the trackpad for as long as it runs: the motor sounds
+    /// `hz`, with `level` shaping its loudness over time (0 is silence, 1 is
+    /// full). This is a real tone, not a stream of taps, so it feels and
+    /// sounds like one unbroken vibration. Falls back to the old tap loop
+    /// where the parametric waveforms are missing.
+    func startTone(hz: Double, level: @escaping @Sendable (TimeInterval) -> Double,
+                   fallback: FeedbackPattern, fallbackGaps: [TimeInterval]) {
+        let pulser = makePulser()
+        if pulser.canVibrate {
+            toneLoop.start(pulser: pulser, hz: hz, level: level)
+        } else {
+            let microseconds = fallbackGaps.map { UInt32(max($0, 0.004) * 1_000_000) }
+            toneLoop.startTaps(actuators: targetActuators, actuate: actuate,
+                               id: fallback.actuationID, gaps: microseconds)
+        }
+    }
+
+    func stopTone() {
+        toneLoop.stop()
+    }
+
+    /// Sounds a single note and lets it finish, for one step of a waveform.
+    /// Independent of the held tone, so a waveform never cancels a hover
+    /// vibration or the other way round.
+    func playTone(hz: Double, level: Double, milliseconds: Double) {
+        let pulser = makePulser()
+        guard pulser.canVibrate else {
+            tick(level > 0.75 ? .levelChange : level > 0.4 ? .generic : .alignment)
+            return
+        }
+        ToneLoop.playOnce(pulser: pulser, hz: hz, level: level, seconds: milliseconds / 1000)
+    }
+
+    private let toneLoop = ToneLoop()
+
+    /// The tone thread. Segments are whole cycles on the firmware's tick
+    /// grid, sent end to end, which is what makes a held note sound like one
+    /// note instead of a rattle. Generation counting makes stop/start
+    /// race-free: the thread re-checks before every segment and exits the
+    /// moment it is stale.
+    private final class ToneLoop {
         private let lock = NSLock()
         private var generation = 0
 
-        func start(actuators: [UnsafeMutableRawPointer], actuate: @escaping ActuateFunc, id: Int32, gaps: [UInt32]) {
-            lock.lock()
-            generation += 1
-            let mine = generation
-            lock.unlock()
-            guard !gaps.isEmpty, !actuators.isEmpty else { return }
+        func start(pulser: Pulser, hz: Double, level: @escaping @Sendable (TimeInterval) -> Double) {
+            let mine = bump()
+            let thread = Thread { [weak self] in
+                Self.run(hz: hz, pulser: pulser, level: level) { self?.isCurrent(mine) ?? false }
+            }
+            thread.name = "com.masonchen.Tactile.tone"
+            thread.qualityOfService = .userInteractive
+            thread.stackSize = 1 << 16
+            thread.start()
+        }
 
+        /// One note that stops itself, with a short fade so it ends cleanly
+        /// rather than cutting off.
+        static func playOnce(pulser: Pulser, hz: Double, level: Double, seconds: TimeInterval) {
+            let thread = Thread {
+                let fade = min(0.03, seconds / 3)
+                Self.run(hz: hz, pulser: pulser, level: { elapsed in
+                    guard elapsed < seconds else { return -1 }
+                    let remaining = seconds - elapsed
+                    return remaining < fade ? level * (remaining / fade) : level
+                }, keepGoing: { true })
+            }
+            thread.name = "com.masonchen.Tactile.note"
+            thread.qualityOfService = .userInteractive
+            thread.stackSize = 1 << 16
+            thread.start()
+        }
+
+        /// The old behaviour, for trackpads whose driver has no parametric
+        /// waveforms: taps fast enough to approximate a buzz.
+        func startTaps(actuators: [UnsafeMutableRawPointer], actuate: @escaping ActuateFunc,
+                       id: Int32, gaps: [UInt32]) {
+            let mine = bump()
+            guard !gaps.isEmpty, !actuators.isEmpty else { return }
             let thread = Thread { [weak self] in
                 var step = 0
                 while let self, self.isCurrent(mine) {
@@ -215,10 +328,37 @@ final class ActuatorHapticEngine: FeedbackEngine {
             thread.start()
         }
 
+        /// Sends segments back to back until the level goes negative or the
+        /// caller says to stop. A level of zero stays silent without ending
+        /// the note, so a rhythm can pulse without tearing down the thread.
+        private static func run(hz: Double, pulser: Pulser,
+                                level: @Sendable (TimeInterval) -> Double,
+                                keepGoing: () -> Bool) {
+            let ticks = SpeakerVoice.segmentTicks(forHz: hz)
+            let chord = Chord(partials: [Chord.Partial(hz: Float(hz), amplitude: 1)],
+                              lengthTicks: ticks, loudness: 1)
+            let segment = HostTime.ticks(chord.seconds)
+            let start = mach_absolute_time()
+            var next = start
+            while keepGoing() {
+                let elapsed = HostTime.seconds(next &- start)
+                let now = level(elapsed)
+                guard now >= 0 else { return }
+                if now > 0.004 { pulser.chord(chord, level: Float(now)) }
+                next &+= segment
+                if next > mach_absolute_time() { mach_wait_until(next) } else { next = mach_absolute_time() }
+            }
+        }
+
         func stop() {
+            _ = bump()
+        }
+
+        private func bump() -> Int {
             lock.lock()
+            defer { lock.unlock() }
             generation += 1
-            lock.unlock()
+            return generation
         }
 
         private func isCurrent(_ mine: Int) -> Bool {
@@ -229,7 +369,7 @@ final class ActuatorHapticEngine: FeedbackEngine {
     }
 
     deinit {
-        buzzer.stop()
+        toneLoop.stop()
         for device in devices {
             _ = closeActuator(device.actuator)
             Unmanaged<AnyObject>.fromOpaque(device.actuator).release()

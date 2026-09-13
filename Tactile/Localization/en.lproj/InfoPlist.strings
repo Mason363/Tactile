@@ -1,0 +1,2 @@
+/* Shown in the System Audio Recording prompt when music haptics is turned on. */
+"NSAudioCaptureUsageDescription" = "Tactile listens to what your Mac plays so the trackpad can play it too, and you can feel the music. Audio is analyzed live on your Mac and never recorded or sent anywhere.";

@@ -131,6 +131,14 @@ final class PhoneHapticEngine: ObservableObject {
         send(line: "{\"type\":\"tick\",\"intensity\":\(feel.intensity),\"sharpness\":\(feel.sharpness)}")
     }
 
+    /// One transient at an exact strength, for music haptics: the phone
+    /// plays continuous intensity, unlike the trackpad's three levels.
+    func pulse(intensity: Double, sharpness: Double) {
+        let intensity = String(format: "%.3f", min(max(intensity, 0), 1))
+        let sharpness = String(format: "%.3f", min(max(sharpness, 0), 1))
+        send(line: "{\"type\":\"tick\",\"intensity\":\(intensity),\"sharpness\":\(sharpness)}")
+    }
+
     // MARK: - Connect loop
 
     private func isCurrent(_ mine: Int) -> Bool {

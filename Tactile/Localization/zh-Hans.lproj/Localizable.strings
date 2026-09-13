@@ -24,6 +24,9 @@
 /* %@ = the already-localized waveform control name. */
 "a11y.waveform.try" = "试用 %@ 的波形";
 
+"dialog.alerts.choose-apps.message" = "选择你想感受其声音的应用";
+"dialog.alerts.choose-apps.prompt" = "选择";
+"dialog.alerts.choose-apps.title" = "选择要感受的应用";
 "dialog.apps.choose-excluded.message" = "选择要停用触觉反馈的应用";
 "dialog.apps.choose-excluded.prompt" = "选择";
 "dialog.apps.choose-excluded.title" = "选择要排除的应用";
@@ -108,6 +111,8 @@
 "format.settings.about.made-by" = "由 %2$@ 倾心制作 %1$@";
 /* %1$@ = the app version; %2$@ = the build number. */
 "format.settings.about.version" = "版本 %1$@（%2$@）";
+/* %@ = the app's display name. */
+"format.settings.alerts.sounds.remove" = "移除 %@";
 /* %@ = the external Coast device name. */
 "format.settings.general.device.coast" = "%@（Coast）";
 /* %d = the unknown keyboard key code. */
@@ -116,12 +121,22 @@
 "format.settings.keyboard.remove-shortcut" = "移除 %@";
 /* %@ = the current shortcut display. */
 "format.settings.keyboard.shortcut" = "快捷键 %@";
+/* %@ = the playing app's display name. */
+"format.settings.music.status.feeling-source" = "正在感受 %@";
+/* %@ = the playing app's display name. */
+"format.settings.music.status.listening-to" = "正在聆听 %@…";
+/* %d = milliseconds, a whole number. */
+"format.settings.music.timing.earlier" = "提前 %d 毫秒";
+/* %d = milliseconds, a whole number. */
+"format.settings.music.timing.later" = "延后 %d 毫秒";
 /* %@ = the waveform or keyboard accessibility name. */
 "format.settings.sound.for-element" = "%@ 的声音";
 /* %.2f = the pitch multiplier. */
 "format.settings.sound.pitch-multiplier" = "%.2f 倍";
 /* %@ = the existing custom haptic name. */
 "format.settings.studio.copied-name" = "%@ 副本";
+/* %d = 频率，单位赫兹。 */
+"format.settings.vibration.hz" = "%d Hz";
 /* %d = vibration pulses per second. */
 "format.settings.vibration.pulses-per-second" = "%d 脉冲/秒";
 /* %.2f values = start, end, total duration, and selected clip duration in seconds. */
@@ -146,6 +161,7 @@
 "language.system" = "跟随系统";
 
 "menu.check-for-updates" = "检查更新…";
+"menu.feel-music" = "感受音乐";
 "menu.grant-accessibility" = "授予辅助功能权限…";
 "menu.haptic-feedback" = "触觉反馈";
 "menu.no-haptic-trackpad" = "未检测到触觉触控板";
@@ -176,6 +192,24 @@
 "settings.about.feedback" = "发送反馈或报告问题";
 "settings.about.source" = "在 GitHub 上查看源代码";
 
+"settings.alerts.charger" = "连接充电器";
+"settings.alerts.notifications" = "通知";
+"settings.alerts.sounds.add" = "添加应用…";
+"settings.alerts.sounds.apps.section" = "应用";
+"settings.alerts.sounds.choose-applications" = "从应用程序中选择…";
+"settings.alerts.sounds.empty" = "尚未添加应用。请添加对你重要的应用。";
+"settings.alerts.sounds.enable" = "应用开始播放声音时提醒";
+"settings.alerts.sounds.explanation" = "用于你可能听不到的声音，例如来电。无需额外权限。";
+"settings.alerts.sounds.footer" = "为每个应用设置不同的触感，不用看屏幕也能分辨来电和计时器。重复最多持续 30 秒。";
+"settings.alerts.sounds.other-apps" = "其他任何应用";
+"settings.alerts.sounds.repeat" = "重复";
+"settings.alerts.sounds.repeat.help" = "声音持续时每隔几秒轻触一次，直到你切换到该应用。";
+"settings.alerts.sounds.running" = "已打开的应用";
+"settings.alerts.sounds.skip-frontmost" = "忽略我正在使用的应用";
+"settings.alerts.sounds.suggested" = "通话";
+"settings.alerts.system.footer" = "Tactile 只留意通知横幅的出现，从不读取其内容。";
+"settings.alerts.system.section" = "系统";
+"settings.alerts.trackpad-note" = "手指放在触控板上才能感受到触觉。也可以改由运行 Coast 的 iPhone 振动（“通用”页）。";
 "settings.apps.browser.description" = "Chrome 位于最前方时，Tactile 会直接读取页面中的可点击元素，包括 macOS 辅助功能无法识别的自定义按钮。需要配套的 Chrome 扩展。";
 "settings.apps.browser.extension-description" = "然后从 Chrome 网上应用店安装配套扩展。它让 Tactile 能够读取浏览器中原本无法识别的按钮。";
 "settings.apps.browser.get-extension" = "获取 Chrome 扩展";
@@ -258,8 +292,38 @@
 "settings.keyboard.sound" = "声音";
 "settings.keyboard.waveform" = "波形";
 
+"settings.music.allow" = "允许…";
+"settings.music.enable" = "感受音乐";
+"settings.music.explanation" = "让触控板演奏正在播放的内容：它的马达会在指尖下奏出音乐本身的音符。对话和播客保持安静。";
+"settings.music.feel.section" = "手感";
+"settings.music.intensity" = "强度";
+"settings.music.intensity.standard-help" = "在“触觉”页启用增强触觉，触控板即可演奏音乐；未启用时，每一次敲击只是一下轻触。";
+"settings.music.manners.section" = "不打扰";
+"settings.music.open-settings" = "打开隐私设置";
+"settings.music.pause-calls" = "通话时暂停";
+"settings.music.pause-navigating" = "使用光标时暂停";
+"settings.music.pause-navigating.explanation" = "让界面反馈清晰可辨。光标停下片刻后，音乐触感便会回来。";
+"settings.music.privacy" = "音频仅在此 Mac 上实时分析以找出节拍、能量与音高，绝不会被录制、存储或发送到任何地方。";
+"settings.music.status.denied" = "Tactile 未获准聆听系统音频。请在“仅系统音频录制”中开启。";
+"settings.music.status.feeling" = "正在感受音乐";
+"settings.music.status.hearing-nothing" = "只听到静音。请确认 Tactile 已在“仅系统音频录制”中获准。";
+"settings.music.status.listening" = "正在聆听…";
+"settings.music.status.needs-permission" = "需要聆听系统音频的权限。";
+"settings.music.status.off" = "Tactile 暂停或关闭时，音乐触感也随之暂停。";
+"settings.music.status.paused-call" = "通话中已暂停";
+"settings.music.status.paused-cursor" = "使用光标时暂停中";
+"settings.music.status.talk" = "对话时保持安静";
+"settings.music.status.unavailable" = "系统音频暂时不可用。";
+"settings.music.status.waiting" = "播放音乐即可感受。";
+"settings.music.texture" = "丰富度";
+"settings.music.texture.explanation" = "同时演奏音乐中的几个声部。调低只保留主音，调高则呈现完整和弦。";
+"settings.music.timing" = "时机";
+"settings.music.timing.auto" = "自动";
+"settings.music.timing.explanation" = "振动会自动与扬声器或耳机对齐。如果仍感觉偏早或偏晚，可以微调。";
 "settings.pane.about.subtitle" = "版本、更新、反馈和致谢。";
 "settings.pane.about.title" = "关于";
+"settings.pane.alerts.subtitle" = "感受你可能听不到的声音。";
+"settings.pane.alerts.title" = "提醒";
 "settings.pane.apps.subtitle" = "Tactile 保持静默的位置，以及 Chrome 浏览器集成。";
 "settings.pane.apps.title" = "应用与浏览器";
 "settings.pane.context.subtitle" = "危险操作、状态、离开、滚动和空间触感。";
@@ -270,6 +334,8 @@
 "settings.pane.haptics.title" = "触觉";
 "settings.pane.keyboard.subtitle" = "输入时感受按键和快捷键。";
 "settings.pane.keyboard.title" = "键盘";
+"settings.pane.music.subtitle" = "透过触控板，听见并感受正在播放的内容。";
+"settings.pane.music.title" = "音乐";
 "settings.pane.performance.subtitle" = "响应速度与资源消耗的权衡。";
 "settings.pane.performance.title" = "性能";
 "settings.pane.playground.subtitle" = "用真实控件体验你的设置。";
@@ -384,16 +450,17 @@
 "settings.studio.try" = "试用";
 
 "settings.vibration.enable" = "悬停时振动";
-"settings.vibration.explanation" = "光标停留在可点击元素上时持续振动。振动期间会消耗少量 CPU 和电量。";
+"settings.vibration.explanation" = "当光标停留在可点按元素上时，触控板会持续发出一个音。发声期间会占用少量 CPU 和电量。";
 "settings.vibration.mode.heartbeat.name" = "心跳";
 "settings.vibration.mode.pulses.name" = "脉冲";
 "settings.vibration.mode.steady.name" = "持续";
+"settings.vibration.pitch" = "音高";
+"settings.vibration.pitch.help" = "触控板马达发出的音。低沉为嗡鸣，高亢为细密的震颤。";
 "settings.vibration.preview.active" = "正在感受…";
 "settings.vibration.preview.hold" = "按住以感受振动";
 "settings.vibration.rhythm" = "节奏";
 "settings.vibration.speed" = "速度";
-"settings.vibration.speed.enhanced-help" = "超过约每秒 100 次脉冲后，点击会融合为一次连续振动。";
-"settings.vibration.speed.standard-help" = "在“触觉”页启用增强触觉，即可解锁足够快、真正像振动的速度。";
+"settings.vibration.speed.standard-help" = "在“触觉”页启用增强触觉，即可发出真正的持续音，而不是一连串轻触。";
 "settings.vibration.strength" = "强度";
 
 "settings.visual.colors.clickable" = "可点击";
@@ -422,19 +489,25 @@
 "waveform.add-pulse" = "添加脉冲";
 "waveform.custom" = "自定义";
 "waveform.edit" = "编辑";
+"waveform.length" = "时长";
+"waveform.note" = "持续音";
 "waveform.pause" = "暂停";
 "waveform.pause-after-pulse" = "脉冲后的暂停";
+"waveform.pitch" = "音高";
 "waveform.play" = "播放";
 "waveform.preset.doubleTap.name" = "双击";
 "waveform.preset.firmTap.name" = "强力点击";
 "waveform.preset.heartbeat.name" = "心跳";
+"waveform.preset.knock.name" = "叩击";
 "waveform.preset.lightTap.name" = "轻触";
 "waveform.preset.rampDown.name" = "渐弱";
 "waveform.preset.rampUp.name" = "渐强";
+"waveform.preset.ring.name" = "铃声";
 "waveform.preset.shake.name" = "振动";
 "waveform.preset.tap.name" = "点击";
 "waveform.preset.tripleTap.name" = "三击";
 "waveform.strength" = "强度";
+"waveform.tap-or-note" = "轻触或持续音";
 "waveform.try" = "试用";
 
 "window.onboarding.title" = "欢迎使用 Tactile";

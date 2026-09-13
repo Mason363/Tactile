@@ -11,5 +11,9 @@
 	<true/>
 	<key>SUPublicEDKey</key>
 	<string>v7hdSqV92lab8k/rrg9bWJr7L1vdqLNZ28b3b3hn+5g=</string>
+	<!-- Shown in the System Audio Recording prompt when music haptics is
+	     turned on. Localized in each language pack's InfoPlist.strings. -->
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Tactile listens to what your Mac plays so the trackpad can play it too, and you can feel the music. Audio is analyzed live on your Mac and never recorded or sent anywhere.</string>
 </dict>
 </plist>

@@ -60,6 +60,11 @@ final class CursorMonitor {
     /// cached geometry is invalidated and the resting position re-resolved.
     var onClick: ((CGPoint) -> Void)?
 
+    /// Called on every mouse event (move, drag, scroll, click) before any
+    /// gating. Music haptics steps aside while the cursor is in use. Nil
+    /// unless that feature is on.
+    var onActivity: (() -> Void)?
+
     /// While the cursor stays inside this rect no new samples are emitted.
     /// Set by the pipeline after each resolution.
     var skipRegion: CGRect?
@@ -169,6 +174,7 @@ final class CursorMonitor {
     /// own geometry, and re-resolve the resting position shortly after the
     /// click's effects (menu opening, navigation) have landed.
     private func handleClick() {
+        onActivity?()
         skipRegion = nil
         lastPoint = nil
         if let point = currentPoint() {
@@ -196,6 +202,7 @@ final class CursorMonitor {
     }
 
     private func handleMove() {
+        onActivity?()
         if let onRawMove, let point = currentPoint() {
             onRawMove(point)
         }

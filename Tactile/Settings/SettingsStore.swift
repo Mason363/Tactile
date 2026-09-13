@@ -72,6 +72,16 @@ enum FeedbackPattern: String, CaseIterable, Identifiable, Codable {
         localizer.string(nameLocalizationKey)
     }
 
+    /// How loud this strength is as a held note, 0...1. Taps come in three
+    /// fixed steps; a note can sit anywhere, so these stand in for them.
+    var toneLevel: Double {
+        switch self {
+        case .alignment: return 0.35
+        case .generic: return 0.6
+        case .levelChange: return 0.85
+        }
+    }
+
 }
 
 /// Temporal shape of the hover vibration.
@@ -88,7 +98,28 @@ enum VibrationMode: String, CaseIterable, Identifiable {
         localizer.string(nameLocalizationKey)
     }
 
-    /// Gaps between consecutive buzz ticks, cycled in order.
+    /// The shape of a held note over time, 0...1: the tap rhythms become
+    /// swells in one continuous note rather than gaps between taps. `base`
+    /// is one beat.
+    func level(at elapsed: TimeInterval, base: TimeInterval) -> Double {
+        switch self {
+        case .steady:
+            return 1
+        case .pulses:
+            let beat = max(base * 4, 0.12)
+            return elapsed.truncatingRemainder(dividingBy: beat * 2) < beat ? 1 : 0
+        case .heartbeat:
+            // Two quick beats, then a rest.
+            let cycle = elapsed.truncatingRemainder(dividingBy: 1)
+            if cycle < 0.12 { return 1 }
+            if cycle < 0.24 { return 0 }
+            if cycle < 0.34 { return 0.75 }
+            return 0
+        }
+    }
+
+    /// Gaps between consecutive buzz ticks, cycled in order. Still used by
+    /// trackpads whose driver cannot hold a note.
     func gaps(base: TimeInterval) -> [TimeInterval] {
         switch self {
         case .steady: return [base]
@@ -149,6 +180,7 @@ struct FeedbackConfig {
     var boundaryWaveform: HapticWaveform
     var vibrateOnHover: Bool
     var vibrateInterval: TimeInterval
+    var vibrateHz: Double
     var vibrationMode: VibrationMode
     var vibratePattern: FeedbackPattern
     var useEnhancedHaptics: Bool
@@ -209,6 +241,7 @@ struct SettingsSnapshot: Codable {
     var boundaryWaveform = WaveformPreset.lightTap.waveform
     var vibrateOnHover = false
     var vibrateRateMs: Double = 50
+    var vibrateHz: Double? = 200
     var vibrationMode = VibrationMode.steady.rawValue
     var vibratePattern = FeedbackPattern.alignment.rawValue
     var useEnhancedHaptics = false
@@ -233,6 +266,16 @@ struct SettingsSnapshot: Codable {
     var scrollWaveform: HapticWaveform? = WaveformPreset.lightTap.waveform
     // Haptic output device.
     var hapticDevice: String? = HapticDeviceTarget.all.rawValue
+    // Music haptics. Absent (a snapshot from before them) leaves the
+    // current values alone rather than resetting, so applying an older
+    // profile never switches the music off. Alerts are global and never
+    // travel in snapshots.
+    var musicHapticsEnabled: Bool? = false
+    var musicIntensity: Double? = 0.6
+    var musicTexture: Double? = 0.5
+    var musicPauseWhileNavigating: Bool? = false
+    var musicPauseDuringCalls: Bool? = true
+    var musicSyncOffsetMs: Double? = 0
 }
 
 struct SettingsProfile: Codable, Identifiable {
@@ -411,6 +454,12 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(vibrateRateMs, forKey: "vibrateRateMs") }
     }
 
+    /// The pitch the trackpad holds while vibrating, in hertz. Its motor
+    /// plays roughly 90 Hz and up.
+    @Published var vibrateHz: Double {
+        didSet { defaults.set(vibrateHz, forKey: "vibrateHz") }
+    }
+
     @Published var vibrationMode: VibrationMode {
         didSet { defaults.set(vibrationMode.rawValue, forKey: "vibrationMode") }
     }
@@ -506,6 +555,86 @@ final class SettingsStore: ObservableObject {
         didSet { setCodable(scrollWaveform, forKey: "scrollWaveform") }
     }
 
+    // MARK: Music haptics
+
+    /// Feel the music: taps on every hit and note of whatever plays, with a
+    /// texture underneath.
+    @Published var musicHapticsEnabled: Bool {
+        didSet { defaults.set(musicHapticsEnabled, forKey: "musicHapticsEnabled") }
+    }
+
+    /// 0...1, how strongly the music is felt.
+    @Published var musicIntensity: Double {
+        didSet { defaults.set(musicIntensity, forKey: "musicIntensity") }
+    }
+
+    /// 0...1, how much texture runs under the taps.
+    @Published var musicTexture: Double {
+        didSet { defaults.set(musicTexture, forKey: "musicTexture") }
+    }
+
+    /// Rest while the cursor is in use, so interface ticks stay clear.
+    @Published var musicPauseWhileNavigating: Bool {
+        didSet { defaults.set(musicPauseWhileNavigating, forKey: "musicPauseWhileNavigating") }
+    }
+
+    /// Rest while an app holds the microphone (a call).
+    @Published var musicPauseDuringCalls: Bool {
+        didSet { defaults.set(musicPauseDuringCalls, forKey: "musicPauseDuringCalls") }
+    }
+
+    /// Timing nudge in milliseconds on top of the automatic alignment;
+    /// positive plays the vibration later.
+    @Published var musicSyncOffsetMs: Double {
+        didSet { defaults.set(musicSyncOffsetMs, forKey: "musicSyncOffsetMs") }
+    }
+
+    // MARK: Alerts
+    //
+    // Global, like the language: never part of profiles, so switching apps
+    // (per-app profiles) can't silently turn off a call alert.
+
+    /// Feel an app start playing sound.
+    @Published var soundAlertsEnabled: Bool {
+        didSet { defaults.set(soundAlertsEnabled, forKey: "soundAlertsEnabled") }
+    }
+
+    @Published var soundAlertRules: [SoundAlertRule] {
+        didSet { setCodable(soundAlertRules, forKey: "soundAlertRules") }
+    }
+
+    /// Any Dock app without its own rule counts too.
+    @Published var soundAlertOtherApps: Bool {
+        didSet { defaults.set(soundAlertOtherApps, forKey: "soundAlertOtherApps") }
+    }
+
+    @Published var soundAlertOtherAppsWaveform: HapticWaveform {
+        didSet { setCodable(soundAlertOtherAppsWaveform, forKey: "soundAlertOtherAppsWaveform") }
+    }
+
+    /// Skip the app you're using: you already know it made a sound.
+    @Published var soundAlertSkipFrontmost: Bool {
+        didSet { defaults.set(soundAlertSkipFrontmost, forKey: "soundAlertSkipFrontmost") }
+    }
+
+    /// Feel notification banners arrive.
+    @Published var notificationHapticsEnabled: Bool {
+        didSet { defaults.set(notificationHapticsEnabled, forKey: "notificationHapticsEnabled") }
+    }
+
+    @Published var notificationWaveform: HapticWaveform {
+        didSet { setCodable(notificationWaveform, forKey: "notificationWaveform") }
+    }
+
+    /// Feel the charger connect, in place of the charging chime.
+    @Published var chargerHapticsEnabled: Bool {
+        didSet { defaults.set(chargerHapticsEnabled, forKey: "chargerHapticsEnabled") }
+    }
+
+    @Published var chargerWaveform: HapticWaveform {
+        didSet { setCodable(chargerWaveform, forKey: "chargerWaveform") }
+    }
+
     /// Haptics composed in the Studio pane, offered in every waveform picker.
     @Published var customHaptics: [CustomHaptic] {
         didSet { setCodable(customHaptics, forKey: "customHaptics") }
@@ -588,6 +717,7 @@ final class SettingsStore: ObservableObject {
         boundaryWaveform = Self.codable(defaults, "boundaryWaveform") ?? WaveformPreset.lightTap.waveform
         vibrateOnHover = defaults.object(forKey: "vibrateOnHover") as? Bool ?? false
         vibrateRateMs = defaults.object(forKey: "vibrateRateMs") as? Double ?? 50
+        vibrateHz = defaults.object(forKey: "vibrateHz") as? Double ?? 200
         vibrationMode = defaults.string(forKey: "vibrationMode").flatMap(VibrationMode.init(rawValue:)) ?? .steady
         vibratePattern = defaults.string(forKey: "vibratePattern").flatMap(FeedbackPattern.init(rawValue:)) ?? .alignment
         // Enhanced haptics defaults ON where the hardware supports it and OFF
@@ -615,6 +745,21 @@ final class SettingsStore: ObservableObject {
         scrollHapticsEnabled = defaults.object(forKey: "scrollHapticsEnabled") as? Bool ?? false
         scrollLines = defaults.object(forKey: "scrollLines") as? Double ?? 3
         scrollWaveform = Self.codable(defaults, "scrollWaveform") ?? WaveformPreset.lightTap.waveform
+        musicHapticsEnabled = defaults.object(forKey: "musicHapticsEnabled") as? Bool ?? false
+        musicIntensity = defaults.object(forKey: "musicIntensity") as? Double ?? 0.6
+        musicTexture = defaults.object(forKey: "musicTexture") as? Double ?? 0.5
+        musicPauseWhileNavigating = defaults.object(forKey: "musicPauseWhileNavigating") as? Bool ?? false
+        musicPauseDuringCalls = defaults.object(forKey: "musicPauseDuringCalls") as? Bool ?? true
+        musicSyncOffsetMs = defaults.object(forKey: "musicSyncOffsetMs") as? Double ?? 0
+        soundAlertsEnabled = defaults.object(forKey: "soundAlertsEnabled") as? Bool ?? false
+        soundAlertRules = Self.codable(defaults, "soundAlertRules") ?? []
+        soundAlertOtherApps = defaults.object(forKey: "soundAlertOtherApps") as? Bool ?? false
+        soundAlertOtherAppsWaveform = Self.codable(defaults, "soundAlertOtherAppsWaveform") ?? WaveformPreset.doubleTap.waveform
+        soundAlertSkipFrontmost = defaults.object(forKey: "soundAlertSkipFrontmost") as? Bool ?? true
+        notificationHapticsEnabled = defaults.object(forKey: "notificationHapticsEnabled") as? Bool ?? false
+        notificationWaveform = Self.codable(defaults, "notificationWaveform") ?? WaveformPreset.knock.waveform
+        chargerHapticsEnabled = defaults.object(forKey: "chargerHapticsEnabled") as? Bool ?? false
+        chargerWaveform = Self.codable(defaults, "chargerWaveform") ?? WaveformPreset.rampUp.waveform
         customHaptics = Self.codable(defaults, "customHaptics") ?? []
         appProfiles = Self.codable(defaults, "appProfiles") ?? [:]
         activeProfileID = defaults.string(forKey: "activeProfileID").flatMap(UUID.init(uuidString:))
@@ -646,6 +791,7 @@ final class SettingsStore: ObservableObject {
             boundaryWaveform: boundaryWaveform,
             vibrateOnHover: vibrateOnHover,
             vibrateInterval: vibrateRateMs / 1000,
+            vibrateHz: vibrateHz,
             vibrationMode: vibrationMode,
             vibratePattern: vibratePattern,
             useEnhancedHaptics: useEnhancedHaptics,
@@ -703,6 +849,7 @@ final class SettingsStore: ObservableObject {
         snapshot.boundaryWaveform = boundaryWaveform
         snapshot.vibrateOnHover = vibrateOnHover
         snapshot.vibrateRateMs = vibrateRateMs
+        snapshot.vibrateHz = vibrateHz
         snapshot.vibrationMode = vibrationMode.rawValue
         snapshot.vibratePattern = vibratePattern.rawValue
         snapshot.useEnhancedHaptics = useEnhancedHaptics
@@ -723,6 +870,12 @@ final class SettingsStore: ObservableObject {
         snapshot.scrollLines = scrollLines
         snapshot.scrollWaveform = scrollWaveform
         snapshot.hapticDevice = hapticDevice.rawValue
+        snapshot.musicHapticsEnabled = musicHapticsEnabled
+        snapshot.musicIntensity = musicIntensity
+        snapshot.musicTexture = musicTexture
+        snapshot.musicPauseWhileNavigating = musicPauseWhileNavigating
+        snapshot.musicPauseDuringCalls = musicPauseDuringCalls
+        snapshot.musicSyncOffsetMs = musicSyncOffsetMs
         return snapshot
     }
 
@@ -768,6 +921,7 @@ final class SettingsStore: ObservableObject {
         boundaryWaveform = snapshot.boundaryWaveform
         vibrateOnHover = snapshot.vibrateOnHover
         vibrateRateMs = snapshot.vibrateRateMs
+        vibrateHz = snapshot.vibrateHz ?? vibrateHz
         vibrationMode = VibrationMode(rawValue: snapshot.vibrationMode) ?? .steady
         vibratePattern = FeedbackPattern(rawValue: snapshot.vibratePattern) ?? .alignment
         useEnhancedHaptics = snapshot.useEnhancedHaptics
@@ -792,6 +946,12 @@ final class SettingsStore: ObservableObject {
         scrollLines = snapshot.scrollLines ?? 3
         scrollWaveform = snapshot.scrollWaveform ?? WaveformPreset.lightTap.waveform
         hapticDevice = snapshot.hapticDevice.flatMap(HapticDeviceTarget.init(rawValue:)) ?? .all
+        musicHapticsEnabled = snapshot.musicHapticsEnabled ?? musicHapticsEnabled
+        musicIntensity = snapshot.musicIntensity ?? musicIntensity
+        musicTexture = snapshot.musicTexture ?? musicTexture
+        musicPauseWhileNavigating = snapshot.musicPauseWhileNavigating ?? musicPauseWhileNavigating
+        musicPauseDuringCalls = snapshot.musicPauseDuringCalls ?? musicPauseDuringCalls
+        musicSyncOffsetMs = snapshot.musicSyncOffsetMs ?? musicSyncOffsetMs
     }
 
     // MARK: - Profiles

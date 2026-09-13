@@ -156,6 +156,7 @@ private struct HapticComposer: View {
                                 .foregroundStyle(.secondary)
                                 .frame(width: 44, alignment: .trailing)
                         }
+                        NoteControls(step: $step)
                         if step.id != haptic.waveform.steps.last?.id {
                             HStack {
                                 Text(verbatim: localization.localizer.string("waveform.pause"))

@@ -41,6 +41,10 @@ final class FeedbackController {
     /// A separate player for keyboard ticks so typing never cancels an
     /// in-flight hover waveform (and vice versa).
     private let keyPlayer = WaveformPlayer()
+    /// Alerts (a sound starting, a notification, the charger) get their
+    /// own player too: an alert must never be cut short by a hover, nor
+    /// cut one short.
+    private let alertPlayer = WaveformPlayer()
     private var lastKeyTickTime: CFTimeInterval = 0
     /// Lines scrolled since the last scroll tick.
     private var scrollAccumulator: Double = 0
@@ -458,6 +462,16 @@ final class FeedbackController {
         }
     }
 
+    /// Plays an alert: an app started making sound, a notification
+    /// arrived, the charger connected. Routed like every other feel, never
+    /// rate limited (alerts are rare and each one matters), no click sound,
+    /// and the fire-flash echo shows it too.
+    func alertFire(_ waveform: HapticWaveform) {
+        log.debug("fire reason=alert steps=\(waveform.steps.count, privacy: .public)")
+        alertPlayer.play(waveform, on: hapticEngine)
+        onFire?()
+    }
+
     /// Scroll haptics: accumulates scroll distance in lines and ticks each
     /// time it crosses the configured stride.
     func handleScrollDelta(_ lines: Double) {
@@ -691,8 +705,17 @@ final class FeedbackController {
         // only way to hold pulse rates high enough (up to 250/sec) to feel
         // like one continuous vibration instead of a series of taps.
         if let actuator = hapticEngine as? ActuatorHapticEngine {
-            let gaps = config.vibrationMode.gaps(base: max(config.vibrateInterval, 0.004))
-            actuator.startBuzz(config.vibratePattern, gaps: gaps)
+            // A real held note, shaped by the chosen rhythm. Trackpads whose
+            // driver cannot hold one fall back to the old tap loop.
+            let base = max(config.vibrateInterval, 0.004)
+            let mode = config.vibrationMode
+            let loudness = config.vibratePattern.toneLevel
+            actuator.startTone(
+                hz: config.vibrateHz,
+                level: { elapsed in mode.level(at: elapsed, base: base) * loudness },
+                fallback: config.vibratePattern,
+                fallbackGaps: mode.gaps(base: base)
+            )
             buzzing = true
             return
         }
@@ -718,7 +741,7 @@ final class FeedbackController {
 
     private func stopVibration() {
         if buzzing {
-            ActuatorHapticEngine.shared?.stopBuzz()
+            ActuatorHapticEngine.shared?.stopTone()
             buzzing = false
         }
         vibrateTimer?.invalidate()

@@ -18,6 +18,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     case haptics
     case vibration
     case keyboard
+    case music
+    case alerts
     case studio
     case context
     case visual
@@ -47,6 +49,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .haptics: return "cursorarrow.rays"
         case .vibration: return "waveform.path"
         case .keyboard: return "keyboard.fill"
+        case .music: return "music.note"
+        case .alerts: return "bell.badge.fill"
         case .studio: return "slider.vertical.3"
         case .context: return "exclamationmark.triangle.fill"
         case .visual: return "eye.fill"
@@ -65,6 +69,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .haptics: return .blue
         case .vibration: return .purple
         case .keyboard: return .mint
+        case .music: return Color(red: 0.93, green: 0.22, blue: 0.45)
+        case .alerts: return Color(red: 0.96, green: 0.42, blue: 0.14)
         case .studio: return .red
         case .context: return .orange
         case .visual: return .green
@@ -92,6 +98,8 @@ struct SettingsView: View {
                     sidebarRow(.haptics)
                     sidebarRow(.vibration)
                     sidebarRow(.keyboard)
+                    sidebarRow(.music)
+                    sidebarRow(.alerts)
                     sidebarRow(.studio)
                     sidebarRow(.context)
                     sidebarRow(.visual)
@@ -140,6 +148,8 @@ struct SettingsView: View {
         case .haptics: HapticsSettingsView()
         case .vibration: VibrationSettingsView()
         case .keyboard: KeyboardSettingsView()
+        case .music: MusicSettingsView()
+        case .alerts: AlertsSettingsView()
         case .studio: HapticStudioView()
         case .context: ContextSettingsView()
         case .visual: VisualAidsView()
@@ -539,21 +549,35 @@ struct VibrationSettingsView: View {
                     }
                 }
 
-                LabeledSlider(
-                    title: localization.localizer.string("settings.vibration.speed"),
-                    value: $settings.vibrateRateMs,
-                    range: settings.useEnhancedHaptics ? 4...150 : 30...150,
-                    step: 2,
-                    format: {
-                        localization.localizer.format(
-                            "format.settings.vibration.pulses-per-second",
-                            arguments: [Int((1000 / $0).rounded())]
-                        )
-                    },
-                    caption: settings.useEnhancedHaptics
-                        ? localization.localizer.string("settings.vibration.speed.enhanced-help")
-                        : localization.localizer.string("settings.vibration.speed.standard-help")
-                )
+                if settings.useEnhancedHaptics {
+                    LabeledSlider(
+                        title: localization.localizer.string("settings.vibration.pitch"),
+                        value: $settings.vibrateHz,
+                        range: 90...500,
+                        step: 5,
+                        format: {
+                            localization.localizer.format(
+                                "format.settings.vibration.hz",
+                                arguments: [Int($0.rounded())]
+                            )
+                        },
+                        caption: localization.localizer.string("settings.vibration.pitch.help")
+                    )
+                } else {
+                    LabeledSlider(
+                        title: localization.localizer.string("settings.vibration.speed"),
+                        value: $settings.vibrateRateMs,
+                        range: 30...150,
+                        step: 2,
+                        format: {
+                            localization.localizer.format(
+                                "format.settings.vibration.pulses-per-second",
+                                arguments: [Int((1000 / $0).rounded())]
+                            )
+                        },
+                        caption: localization.localizer.string("settings.vibration.speed.standard-help")
+                    )
+                }
             }
             .disabled(!settings.vibrateOnHover)
 
@@ -606,7 +630,13 @@ private struct HoldToFeelButton: View {
         if settings.useEnhancedHaptics, let actuator = ActuatorHapticEngine.shared {
             let base = max(settings.vibrateRateMs / 1000, 0.004)
             let mode = settings.vibrationMode
-            actuator.startBuzz(settings.vibratePattern, gaps: mode.gaps(base: base))
+            let loudness = settings.vibratePattern.toneLevel
+            actuator.startTone(
+                hz: settings.vibrateHz,
+                level: { elapsed in mode.level(at: elapsed, base: base) * loudness },
+                fallback: settings.vibratePattern,
+                fallbackGaps: mode.gaps(base: base)
+            )
             return
         }
         scheduleTick()
@@ -642,7 +672,7 @@ private struct HoldToFeelButton: View {
         timer?.invalidate()
         timer = nil
         step = 0
-        ActuatorHapticEngine.shared?.stopBuzz()
+        ActuatorHapticEngine.shared?.stopTone()
     }
 }
 

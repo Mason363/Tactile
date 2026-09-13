@@ -18,19 +18,31 @@ final class WaveformPlayer {
         self.engine = engine
         var fireAt: TimeInterval = 0
         for (index, step) in waveform.steps.enumerated() {
-            let strength = step.effectiveStrength
             if index == 0 {
-                engine.tick(strength)
+                Self.fire(step, on: engine)
             } else {
                 let timer = Timer(timeInterval: fireAt, repeats: false) { [weak self] _ in
                     Task { @MainActor [weak self] in
-                        self?.engine?.tick(strength)
+                        guard let engine = self?.engine else { return }
+                        Self.fire(step, on: engine)
                     }
                 }
                 RunLoop.main.add(timer, forMode: .common)
                 timers.append(timer)
             }
-            fireAt += max(step.gapMs, 10) / 1000
+            fireAt += max(step.advanceMs, 10) / 1000
+        }
+    }
+
+    /// A held note where the trackpad can sound one, a tap everywhere else.
+    /// The phone and the public engine have no way to play a pitch, so a
+    /// note degrades to a tap of the same strength rather than silence.
+    @MainActor
+    private static func fire(_ step: WaveformStep, on engine: FeedbackEngine) {
+        if let hz = step.hz, let actuator = engine as? ActuatorHapticEngine {
+            actuator.playTone(hz: hz, level: step.level, milliseconds: step.toneMs ?? 120)
+        } else {
+            engine.tick(step.effectiveStrength)
         }
     }
 

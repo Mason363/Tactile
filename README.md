@@ -52,8 +52,9 @@ per-element, so continuous use stays under a few percent of one core.
   reads the real page DOM, so `<div>`-style buttons that never reach the
   accessibility tree still tick. Source in [`extension/`](extension/).
 - **Haptic waveforms**: every feel is a composable waveform: pick a preset
-  (taps, double/triple tap, ramps, shake, heartbeat) or compose your own pulse
-  by pulse, per element type.
+  (taps, double/triple tap, ramps, shake, heartbeat, ring) or compose your own
+  step by step, per element type. Any step can be a tap or a held note with
+  its own pitch and length, played by the trackpad's motor as a real tone.
 - **Contextual danger feel**: window close buttons and controls labeled
   Delete/Remove/Reset/etc. play their own warning waveform.
 - **State awareness**: checked checkboxes and the selected tab add a
@@ -69,9 +70,9 @@ per-element, so continuous use stays under a few percent of one core.
   Light/Standard/Firm become physically different strengths. Uses a private
   system framework, loaded at runtime with automatic fallback to standard
   haptics if it's ever unavailable.
-- **Continuous vibration**: with enhanced haptics on, keep the trackpad
-  buzzing while the cursor rests on a control, fast enough (up to 250 pulses/s)
-  to feel like a true vibration rather than a series of taps.
+- **Continuous vibration**: with enhanced haptics on, the trackpad holds a
+  real note while the cursor rests on a control, at a pitch you choose from a
+  deep hum to a fine buzz, shaped as steady, pulses, or a heartbeat.
 - **iPhone as the haptic device (via [Coast](https://coast.masn.studio))**:
   when Coast connects an iPhone to your Mac, the phone shows up in the device
   chooser and every tick plays in your hand through its Taptic Engine: ideal
@@ -87,6 +88,17 @@ per-element, so continuous use stays under a few percent of one core.
   login, one-click pause**: the usual knobs for taste and battery.
 - **Keyboard haptics**: tick on shortcuts, every key, modifiers, or your own
   recorded key combinations, each with its own waveform.
+- **Feel the music**: the trackpad plays whatever your Mac is playing. Its
+  haptic motor sounds the music's own notes under your finger, up to five at
+  once, with the bass folded up an octave the way a small speaker plays it,
+  and it follows the music's loudness. It works the same for any kind of
+  music, while talk and podcasts stay still. It pauses during calls and can
+  rest while you use the cursor. Everything is lined up with your speakers or
+  Bluetooth headphones automatically.
+- **Sound alerts**: for sounds you might not hear. Feel an app start making
+  sound, each app with its own pattern: an incoming FaceTime, Zoom, or Teams
+  call rings on the trackpad until you switch to it. Notification banners and
+  the charger connecting have their own feel too.
 - **Languages**: English and Simplified Chinese (简体中文). Tactile follows
   your Mac's language list, or pick one in Settings → General. Adding a
   language is a resource folder; see [`docs/localization.md`](docs/localization.md).
@@ -108,6 +120,12 @@ telling what's interactive on screen:
 
 Together with the haptic tick, this gives low-vision users three independent
 signals (feel, color, and shape) for the same event.
+
+For hard-of-hearing users, Tactile turns sounds into touch: a call rings on the
+trackpad with its own pattern and keeps ringing until you switch to the app,
+notification banners knock, plugging in the charger ramps up, and any music
+can be felt as it plays, through the trackpad itself. Turn these on in
+Tactile Settings -> Alerts and Music.
 
 ### Crosshair
 https://github.com/user-attachments/assets/39e714b6-001d-41fa-ad16-dd00278f0ac2
@@ -133,6 +151,9 @@ To enable these, go to Tactile Settings -> visual aids
 - macOS 14.6 or later.
 - The **Accessibility** permission (System Settings → Privacy & Security →
   Accessibility). Tactile walks you through this on first launch.
+- Optional, for Feel the Music only: the **System Audio Recording** permission
+  (System Settings → Privacy & Security → Screen & System Audio Recording,
+  under System Audio Recording Only). Tactile asks when you turn it on.
 
 ## Install
 
@@ -198,14 +219,20 @@ check.
 - **On-device only.** The Accessibility permission is used solely to identify
   the *kind* of UI element under the cursor (button, link, …), never your
   content, and never keystrokes.
+- **Music is heard, never recorded.** Feel the Music analyzes system audio live,
+  in memory, to find the notes and loudness to play; nothing is recorded, stored, or sent, and it
+  only listens while something plays. Sound alerts don't touch audio at all:
+  they read Core Audio's record of which apps are playing. Notification
+  haptics notice that a banner appeared, never what it says.
 - **Local IPC only.** The optional browser bridge talks to the extension over a
   local Unix socket in your Application Support folder, never over the network.
   The optional Coast link (iPhone haptics) has the same shape: a local socket
   to the Coast app on this Mac; any networking to the phone is Coast's, not
   Tactile's.
-- **Auditable.** The one private API (the trackpad actuator, via
-  MultitouchSupport) is loaded at runtime with `dlopen` and falls back safely;
-  everything else is public API. The whole source is here.
+- **Auditable.** The few private functions (the trackpad actuator via
+  MultitouchSupport, the System Audio Recording permission check, and matching
+  an app's audio helper to the app) are loaded at runtime with `dlopen` and
+  fall back safely; everything else is public API. The whole source is here.
 
 ## License
 
