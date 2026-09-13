@@ -22,6 +22,19 @@
         5. Set SUPublicEDKey in Info.plist to the matching public key.
     -->
     <item>
+      <title>Tactile 1.1.2</title>
+      <pubDate>Sun, 13 Sep 2026 03:35:09 +0000</pubDate>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <sparkle:minimumAutoupdateVersion>4</sparkle:minimumAutoupdateVersion>
+      <description><![CDATA[<p><strong>Your trackpad plays the music.</strong> Feel the Music is new: the trackpad's haptic motor plays the music's own notes under your finger, up to five at once, following its loudness. Talk and podcasts stay still.</p><ul><li>Vibrate while hovering holds a real note, with a new Pitch control.</li><li>Any step in the haptic maker can be a held note with its own pitch and length.</li><li>Ring and Shake are real tones now.</li><li>Sound Alerts: feel sounds you might not hear.</li></ul>]]></description>
+      <enclosure url="https://github.com/Mason363/Tactile/releases/download/v1.1.2/Tactile-1.1.2.zip"
+                 sparkle:version="7"
+                 sparkle:shortVersionString="1.1.2"
+                 length="3594238"
+                 sparkle:edSignature="tCXg0FmQJdN4HLVWZ9BPasJuvo9SK1dskF4dtxJoUlwc676o2EkT6BSHxSuqyHwH/g3HS5FpFESIxZaaJvHRBQ=="
+                 type="application/octet-stream" />
+    </item>
+    <item>
       <title>Tactile 1.1.0</title>
       <pubDate>Sat, 12 Sep 2026 00:00:00 +0000</pubDate>
       <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
@@ -57,17 +70,6 @@
                  sparkle:shortVersionString="1.0.3"
                  length="3054678"
                  sparkle:edSignature="uNrXytYTw55y2jHicOQ4OVXPnnDP1nmV/S7Bdfup6jTv6D3KXCq2JgF9z9Q3E+QQRQSnaTIDCAS33591HZmhDg=="
-                 type="application/octet-stream" />
-    </item>
-    <item>
-      <title>Tactile 1.0</title>
-      <pubDate>Wed, 02 Jul 2026 00:00:00 +0000</pubDate>
-      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
-      <description><![CDATA[<p>Initial public release.</p>]]></description>
-      <enclosure url="https://github.com/Mason363/Tactile/releases/download/v1.0/Tactile-1.0.zip"
-                 sparkle:version="1"
-                 sparkle:shortVersionString="1.0"
-                 length="5000000"
                  type="application/octet-stream" />
     </item>
   </channel>
