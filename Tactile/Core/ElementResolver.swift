@@ -32,7 +32,8 @@ struct ResolvedElement {
     var isInFocusedWindow = true
 }
 
-/// Hit-tests the accessibility tree on a background queue.
+/// Hit-tests the accessibility tree on a background queue, except over our
+/// own windows, which can only be queried on the main thread (see `hitTest`).
 ///
 /// Queries run strictly one at a time with latest-wins coalescing: while a
 /// query is in flight, newer cursor positions overwrite the pending one and
@@ -58,27 +59,58 @@ final class ElementResolver {
     /// are detected up front and run on main.
     private let ownPID = getpid()
 
+    /// A cursor position to resolve, with what the main thread knew about it
+    /// when it was sampled.
+    private struct Sample {
+        let point: CGPoint
+        /// The point may be over one of our own windows: resolve on main.
+        let onMain: Bool
+        /// Another app whose window covers ours at the point: hit-tested
+        /// directly, which can never land on our own process.
+        let coveringPID: pid_t?
+        /// The app with keyboard focus, which the focus queries ask directly.
+        let focusedPID: pid_t?
+    }
+
     private let stateLock = NSLock()
-    private var pendingPoint: CGPoint?
+    private var pendingSample: Sample?
     private var isDraining = false
+
+    /// The focused app of the sample being resolved.
+    private var sampleFocusedPID: pid_t?
 
     private var bundleIDCache: [pid_t: String?] = [:]
 
     private var cachedFocusedWindow: AXUIElement?
+    private var focusedWindowPID: pid_t?
     private var focusedWindowStamp: CFTimeInterval = 0
 
     private var cachedFocusedMenu: AXUIElement?
+    private var focusedMenuPID: pid_t?
     private var focusedMenuStamp: CFTimeInterval = 0
 
-    /// Separate handle for focus queries: they run at most every 400ms, so
-    /// they can afford a longer timeout than per-sample hit-testing -
-    /// Chromium regularly needs more than 50ms to answer them. The timeout
-    /// is still kept tight (100ms): this query runs at the front of every
-    /// hit-test on a cache miss, so its worst case bounds the whole
-    /// pipeline's worst case.
-    private let focusQuery = AXUIElementCreateSystemWide()
+    /// Focus queries run at most every 400ms, so they can afford a longer
+    /// timeout than per-sample hit-testing - Chromium regularly needs more
+    /// than 50ms to answer them. The timeout is still kept tight (100ms):
+    /// this query runs at the front of every hit-test on a cache miss, so its
+    /// worst case bounds the whole pipeline's worst case.
+    private static let focusTimeout: Float = 0.1
 
     private static let axTimeout: Float = 0.05
+
+    /// Reach around our own windows' frames within which the window server is
+    /// asked whose window is under the cursor. Generous, since a dragged
+    /// window's frame lags the cursor; asking costs one window-server query.
+    private static let ownWindowSlack: CGFloat = 64
+
+    /// Our windows seen on screen in the last half second, by window number:
+    /// one that just moved or closed can still be where the window server and
+    /// the hit-test find it. Main thread only.
+    private var recentOwnWindows: [Int: (frame: CGRect, seen: CFTimeInterval)] = [:]
+
+    /// Per window number, the app that owns it (nil for a window no app owns,
+    /// like the menu bar). Window numbers aren't reused. Main thread only.
+    private static var windowApps: [Int: pid_t?] = [:]
 
     /// Hard ceiling on the speculative ancestor/descent search per hit-test.
     /// The essential first resolution is never budgeted; only the extra work
@@ -91,12 +123,19 @@ final class ElementResolver {
 
     init() {
         AXUIElementSetMessagingTimeout(systemWide, Self.axTimeout)
-        AXUIElementSetMessagingTimeout(focusQuery, 0.1)
     }
 
+    /// Queues a hit-test at `point` (top-left coordinates). Main thread only.
     func resolve(at point: CGPoint) {
+        let route = sampleRoute(at: point)
+        let sample = Sample(
+            point: point,
+            onMain: route.onMain,
+            coveringPID: route.coveringPID,
+            focusedPID: NSWorkspace.shared.frontmostApplication?.processIdentifier
+        )
         stateLock.lock()
-        pendingPoint = point
+        pendingSample = sample
         let shouldStart = !isDraining
         if shouldStart { isDraining = true }
         stateLock.unlock()
@@ -108,15 +147,20 @@ final class ElementResolver {
     private func drain() {
         while true {
             stateLock.lock()
-            guard let point = pendingPoint else {
+            guard let sample = pendingSample else {
                 isDraining = false
                 stateLock.unlock()
                 return
             }
-            pendingPoint = nil
+            pendingSample = nil
             stateLock.unlock()
 
-            let resolved = hitTest(at: point)
+            // Over our own windows the whole resolution runs on main; every
+            // other app is resolved here, so a slow one never stalls the UI.
+            let resolved = sample.onMain
+                ? DispatchQueue.main.sync { hitTest(sample) }
+                : hitTest(sample)
+            let point = sample.point
             if let onResolve {
                 // FIFO delivery (DispatchQueue.main, not unstructured Tasks):
                 // two resolutions arriving out of order would let a STALE
@@ -129,24 +173,36 @@ final class ElementResolver {
         }
     }
 
-    // MARK: - AX queries (background queue only)
+    // MARK: - AX queries (background queue, or main over our own windows)
 
-    private func hitTest(at point: CGPoint) -> ResolvedElement? {
+    private func hitTest(_ sample: Sample) -> ResolvedElement? {
         // Resolve the element under the cursor. Cross-process AX calls are MIG
-        // messages and safe off-main; the copy-at-position hit-test is safe
-        // even when it lands on our own process. But the *attribute* queries
-        // below are serviced synchronously in-process for our own windows
-        // (Sparkle's update dialog, the settings window), and touching an
-        // AppKit view off the main thread - e.g. an NSImageView still doing
-        // async image preparation for the app icon - trips an assertion and
-        // aborts. So if the element belongs to us, redo the whole resolution
-        // on the main thread before querying anything about it.
+        // messages and safe off-main. Calls that land on our OWN process are
+        // not: they run synchronously on the calling thread and walk our
+        // AppKit and SwiftUI views, the copy-at-position hit-test included.
+        // Off the main thread that aborted inside an NSImageView still
+        // preparing its image (Sparkle's update dialog), and deadlocked while
+        // a window moved: the hit-test held AppKit's view hierarchy lock and
+        // waited inside SwiftUI for main, while main waited for that lock to
+        // set the window's frame (dragging the settings window with Rectangle
+        // running). So samples that may be over our windows arrive here on
+        // main already (sampleRoute). Should one slip through, query
+        // nothing more about the element here and redo the resolution on main.
+        let point = sample.point
+        sampleFocusedPID = sample.focusedPID
+        // Another app's window over ours is asked in that app, which can
+        // never be us; everything else goes through the system-wide element.
+        var target = systemWide
+        if let pid = sample.coveringPID {
+            target = AXUIElementCreateApplication(pid)
+            AXUIElementSetMessagingTimeout(target, Self.axTimeout)
+        }
         var elementRef: AXUIElement?
-        let error = AXUIElementCopyElementAtPosition(systemWide, Float(point.x), Float(point.y), &elementRef)
+        let error = AXUIElementCopyElementAtPosition(target, Float(point.x), Float(point.y), &elementRef)
         guard error == .success, let element = elementRef else { return nil }
 
         if !Thread.isMainThread, elementPID(element) == ownPID {
-            return DispatchQueue.main.sync { hitTest(at: point) }
+            return DispatchQueue.main.sync { hitTest(sample) }
         }
 
         // Web overlay popups (Chromium/Electron menus, selects) defeat the
@@ -348,6 +404,52 @@ final class ElementResolver {
         return pid
     }
 
+    /// Where the sample at `point` (top-left coordinates) resolves, so that no
+    /// accessibility call reaches our own process off main. Main thread only.
+    ///
+    /// Far from our windows (AppKit lists them all, open menus and the status
+    /// item included): the system-wide hit-test on the queue, as always. Near
+    /// one, with slack and briefly after it moves or closes, the window server
+    /// says whose window a click at the point reaches. Ours, or no app's:
+    /// resolve on main. Another app's window on top of ours: hit-test that app
+    /// directly on the queue, so a window of ours showing up under it
+    /// meanwhile can't be reached. That keeps Rectangle's snap footprint off
+    /// our main thread: it covers the cursor while Rectangle queries us about
+    /// the dragged window, and resolving it from main would wait on
+    /// Rectangle's main thread while Rectangle waits on ours.
+    private func sampleRoute(at point: CGPoint) -> (onMain: Bool, coveringPID: pid_t?) {
+        let appKitPoint = CGPoint(x: point.x, y: (NSScreen.screens.first?.frame.maxY ?? 0) - point.y)
+        let now = CACurrentMediaTime()
+        for window in NSApp.windows where window.isVisible && !window.ignoresMouseEvents && window.windowNumber > 0 {
+            recentOwnWindows[window.windowNumber] = (window.frame, now)
+        }
+        recentOwnWindows = recentOwnWindows.filter { now - $0.value.seen < 0.5 }
+        let nearOwnWindow = recentOwnWindows.values.contains {
+            $0.frame.insetBy(dx: -Self.ownWindowSlack, dy: -Self.ownWindowSlack).contains(appKitPoint)
+        }
+        guard nearOwnWindow else { return (false, nil) }
+
+        let number = NSWindow.windowNumber(at: appKitPoint, belowWindowWithWindowNumber: 0)
+        if number > 0, NSApp.window(withWindowNumber: number) == nil,
+           let app = Self.owningApp(ofWindow: number), app != ownPID {
+            return (false, app)
+        }
+        return (true, nil)
+    }
+
+    private static func owningApp(ofWindow number: Int) -> pid_t? {
+        if let cached = windowApps[number] { return cached }
+        var app: pid_t?
+        if let info = (CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(number)) as? [[String: Any]])?.first,
+           let owner = info[kCGWindowOwnerPID as String] as? pid_t,
+           NSRunningApplication(processIdentifier: owner) != nil {
+            app = owner
+        }
+        if windowApps.count > 256 { windowApps.removeAll() }
+        windowApps.updateValue(app, forKey: number)
+        return app
+    }
+
     private func isClickable(_ resolved: ResolvedElement) -> Bool {
         ClickabilityClassifier.classify(
             role: resolved.role,
@@ -511,13 +613,21 @@ final class ElementResolver {
     /// the pointer). Cached briefly; returns nil when nothing menu-like is
     /// focused, which is the overwhelmingly common case.
     private func focusedMenuContainer() -> AXUIElement? {
+        // Web popups belong to other apps. Our own menus are real windows the
+        // hit-test finds, and our own process is never queried off main.
+        guard let pid = sampleFocusedPID, pid != ownPID else { return nil }
         let now = CACurrentMediaTime()
-        if now - focusedMenuStamp < 0.4 { return cachedFocusedMenu }
+        if now - focusedMenuStamp < 0.4, pid == focusedMenuPID { return cachedFocusedMenu }
         focusedMenuStamp = now
+        focusedMenuPID = pid
         cachedFocusedMenu = nil
 
+        // Ask the sampled app itself: the system-wide element would answer
+        // for whoever holds focus now, which could be us.
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, Self.focusTimeout)
         var focusedRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(focusQuery, "AXFocusedUIElement" as CFString, &focusedRef) == .success,
+        guard AXUIElementCopyAttributeValue(app, "AXFocusedUIElement" as CFString, &focusedRef) == .success,
               let value = focusedRef, CFGetTypeID(value) == AXUIElementGetTypeID()
         else { return nil }
         let focused = value as! AXUIElement
@@ -551,18 +661,19 @@ final class ElementResolver {
         return cachedFocusedMenu
     }
 
-    /// The window with system-wide keyboard focus, cached briefly since it
-    /// changes rarely and the lookup costs two AX calls.
+    /// The window with keyboard focus, cached briefly since it changes rarely.
     private func systemFocusedWindow() -> AXUIElement? {
+        guard let pid = sampleFocusedPID else { return nil }
+        // Our own focused window can only be asked for on main. Off main the
+        // element being resolved belongs to another app, so it can't be in
+        // our focused window anyway.
+        if pid == ownPID, !Thread.isMainThread { return nil }
         let now = CACurrentMediaTime()
-        if now - focusedWindowStamp < 0.25 { return cachedFocusedWindow }
+        if now - focusedWindowStamp < 0.25, pid == focusedWindowPID { return cachedFocusedWindow }
         focusedWindowStamp = now
+        focusedWindowPID = pid
 
-        var appRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(systemWide, "AXFocusedApplication" as CFString, &appRef) == .success,
-              let appValue = appRef, CFGetTypeID(appValue) == AXUIElementGetTypeID()
-        else { cachedFocusedWindow = nil; return nil }
-        let app = appValue as! AXUIElement
+        let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, Self.axTimeout)
 
         var windowRef: CFTypeRef?
