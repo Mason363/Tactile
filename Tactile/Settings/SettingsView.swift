@@ -378,6 +378,12 @@ struct HapticsSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if ActuatorHapticEngine.shared != nil {
+                    Toggle(localization.localizer.string("settings.haptics.trackpad-only"), isOn: $settings.trackpadOnlyHaptics)
+                    Text(verbatim: localization.localizer.string("settings.haptics.trackpad-only.explanation"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section {

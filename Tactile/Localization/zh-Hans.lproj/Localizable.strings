@@ -269,6 +269,8 @@
 "settings.haptics.enhanced" = "增强触觉";
 "settings.haptics.enhanced.explanation" = "使轻柔、标准和强力触感具有不同的物理强度，并解锁真正的连续振动。";
 "settings.haptics.enhanced.unavailable" = "此 Mac 不支持。将使用标准触觉。";
+"settings.haptics.trackpad-only" = "仅在使用触控板时";
+"settings.haptics.trackpad-only.explanation" = "使用外接鼠标移动光标时不触发触觉反馈。声音和视觉闪烁仍会播放。";
 "settings.haptics.focused-window-only" = "仅对当前窗口中的按钮提供反馈";
 "settings.haptics.focused-window-only.explanation" = "启用后会覆盖上述选择。";
 "settings.haptics.quiet-modes.section" = "安静模式";

@@ -70,6 +70,10 @@ final class ActuatorHapticEngine: FeedbackEngine {
     private let playActuation: PlayActuationFunc?
     private let createActuation: CreateActuationFunc?
 
+    /// Watches for fingers on the haptic trackpads, so feedback can stand
+    /// down while an external mouse is doing the pointing. Idle until asked.
+    let touches = TrackpadTouchTracker()
+
     private init?() {
         let path = "/System/Library/PrivateFrameworks/MultitouchSupport.framework/MultitouchSupport"
         guard let handle = dlopen(path, RTLD_NOW) else { return nil }
@@ -115,12 +119,12 @@ final class ActuatorHapticEngine: FeedbackEngine {
               let scanned = listDevices()?.takeRetainedValue() as? [AnyObject]
         else { return }
 
-        var found: [(id: UInt64, isBuiltIn: Bool)] = []
+        var found: [(id: UInt64, isBuiltIn: Bool, device: AnyObject)] = []
         for device in scanned {
             let pointer = Unmanaged.passUnretained(device).toOpaque()
             var deviceID: UInt64 = 0
             guard getDeviceID(pointer, &deviceID) == 0, deviceID != 0 else { continue }
-            found.append((deviceID, deviceIsBuiltIn?(pointer) ?? false))
+            found.append((deviceID, deviceIsBuiltIn?(pointer) ?? false, device))
         }
         // An empty scan is a framework hiccup, not zero trackpads.
         guard !found.isEmpty else { return }
@@ -137,6 +141,9 @@ final class ActuatorHapticEngine: FeedbackEngine {
             guard let actuator = create(candidate.id) else { continue }
             if openActuator(actuator) == 0 {
                 devices.append(Device(id: candidate.id, isBuiltIn: candidate.isBuiltIn, actuator: actuator, present: true))
+                // Kept alive for good, like the actuator: the touch tracker
+                // may hold it for as long as the app runs.
+                touches?.add(Unmanaged.passRetained(candidate.device).toOpaque())
             } else {
                 Unmanaged<AnyObject>.fromOpaque(actuator).release()
             }

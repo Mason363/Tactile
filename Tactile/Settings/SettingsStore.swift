@@ -185,6 +185,7 @@ struct FeedbackConfig {
     var vibratePattern: FeedbackPattern
     var useEnhancedHaptics: Bool
     var hapticDevice: HapticDeviceTarget
+    var trackpadOnlyHaptics: Bool
     var audioEnabled: Bool
     var audioVolume: Double
     var audioSoundName: String
@@ -477,6 +478,13 @@ final class SettingsStore: ObservableObject {
         didSet { defaults.set(hapticDevice.rawValue, forKey: "hapticDevice") }
     }
 
+    /// Skips haptics while the cursor is being moved with something other
+    /// than a trackpad, such as an external mouse. A device preference, so
+    /// it stays out of profiles and exported snapshots.
+    @Published var trackpadOnlyHaptics: Bool {
+        didSet { defaults.set(trackpadOnlyHaptics, forKey: "trackpadOnlyHaptics") }
+    }
+
     @Published var audioSoundName: String {
         didSet { defaults.set(audioSoundName, forKey: "audioSoundName") }
     }
@@ -725,6 +733,7 @@ final class SettingsStore: ObservableObject {
         // that can and quietly falls back on Macs that cannot.
         useEnhancedHaptics = defaults.object(forKey: "useEnhancedHaptics") as? Bool ?? ActuatorHapticEngine.hasHapticTrackpad
         hapticDevice = defaults.string(forKey: "hapticDevice").flatMap(HapticDeviceTarget.init(rawValue:)) ?? .all
+        trackpadOnlyHaptics = defaults.object(forKey: "trackpadOnlyHaptics") as? Bool ?? false
         audioSoundName = defaults.string(forKey: "audioSoundName") ?? "Pop"
         audioEnabled = defaults.object(forKey: "audioEnabled") as? Bool ?? false
         audioVolume = defaults.object(forKey: "audioVolume") as? Double ?? 0.5
@@ -796,6 +805,7 @@ final class SettingsStore: ObservableObject {
             vibratePattern: vibratePattern,
             useEnhancedHaptics: useEnhancedHaptics,
             hapticDevice: hapticDevice,
+            trackpadOnlyHaptics: trackpadOnlyHaptics,
             audioEnabled: audioEnabled,
             audioVolume: audioVolume,
             audioSoundName: audioSoundName,

@@ -254,6 +254,8 @@
 "settings.haptics.enhanced" = "Enhanced haptics";
 "settings.haptics.enhanced.explanation" = "Makes Light, Standard, and Firm physically different strengths and unlocks true continuous vibration.";
 "settings.haptics.enhanced.unavailable" = "Not available on this Mac. Standard haptics are used.";
+"settings.haptics.trackpad-only" = "Only when using the trackpad";
+"settings.haptics.trackpad-only.explanation" = "Skips haptics while the cursor is moved with an external mouse. Sounds and the visual flash still play.";
 "settings.haptics.focused-window-only" = "Only buttons in the focused window";
 "settings.haptics.focused-window-only.explanation" = "Overrides the choices above while on.";
 "settings.haptics.quiet-modes.section" = "Quiet Modes";

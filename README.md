@@ -70,6 +70,10 @@ per-element, so continuous use stays under a few percent of one core.
   Light/Standard/Firm become physically different strengths. Uses a private
   system framework, loaded at runtime with automatic fallback to standard
   haptics if it's ever unavailable.
+- **Trackpad-only haptics (optional)**: skips haptics while the cursor is moved
+  with an external mouse, so only the trackpad ticks. It watches for finger
+  contact on the haptic trackpads and, if that can't be read, never silences
+  anything. Sounds and the visual flash still play.
 - **Continuous vibration**: with enhanced haptics on, the trackpad holds a
   real note while the cursor rests on a control, at a pitch you choose from a
   deep hum to a fine buzz, shaped as steady, pulses, or a heartbeat.
@@ -229,8 +233,8 @@ check.
   The optional Coast link (iPhone haptics) has the same shape: a local socket
   to the Coast app on this Mac; any networking to the phone is Coast's, not
   Tactile's.
-- **Auditable.** The few private functions (the trackpad actuator via
-  MultitouchSupport, the System Audio Recording permission check, and matching
+- **Auditable.** The few private functions (the trackpad actuator and
+  finger-contact frames via MultitouchSupport, the System Audio Recording permission check, and matching
   an app's audio helper to the app) are loaded at runtime with `dlopen` and
   fall back safely; everything else is public API. The whole source is here.
 
