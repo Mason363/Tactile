@@ -70,6 +70,10 @@ final class ActuatorHapticEngine: FeedbackEngine {
     private let playActuation: PlayActuationFunc?
     private let createActuation: CreateActuationFunc?
 
+    /// Watches for fingers on the haptic trackpads, so feedback can stand
+    /// down while an external mouse is doing the pointing. Idle until asked.
+    let touches = TrackpadTouchTracker()
+
     private init?() {
         let path = "/System/Library/PrivateFrameworks/MultitouchSupport.framework/MultitouchSupport"
         guard let handle = dlopen(path, RTLD_NOW) else { return nil }
@@ -93,6 +97,7 @@ final class ActuatorHapticEngine: FeedbackEngine {
         playActuation = dlsym(handle, "MTActuationActuate").map { unsafeBitCast($0, to: PlayActuationFunc.self) }
         createActuation = dlsym(handle, "MTActuationCreateFromDictionary").map { unsafeBitCast($0, to: CreateActuationFunc.self) }
 
+        touches?.rescan = { [weak self] in self?.refreshDevices() }
         refreshDevices()
         if devices.isEmpty, let actuator = create(Self.legacyDeviceID) {
             if openActuator(actuator) == 0 {
@@ -115,12 +120,12 @@ final class ActuatorHapticEngine: FeedbackEngine {
               let scanned = listDevices()?.takeRetainedValue() as? [AnyObject]
         else { return }
 
-        var found: [(id: UInt64, isBuiltIn: Bool)] = []
+        var found: [(id: UInt64, isBuiltIn: Bool, device: AnyObject)] = []
         for device in scanned {
             let pointer = Unmanaged.passUnretained(device).toOpaque()
             var deviceID: UInt64 = 0
             guard getDeviceID(pointer, &deviceID) == 0, deviceID != 0 else { continue }
-            found.append((deviceID, deviceIsBuiltIn?(pointer) ?? false))
+            found.append((deviceID, deviceIsBuiltIn?(pointer) ?? false, device))
         }
         // An empty scan is a framework hiccup, not zero trackpads.
         guard !found.isEmpty else { return }
@@ -141,6 +146,11 @@ final class ActuatorHapticEngine: FeedbackEngine {
                 Unmanaged<AnyObject>.fromOpaque(actuator).release()
             }
         }
+
+        // The touch tracker gets this scan's objects for every haptic
+        // trackpad: older ones stop reporting after sleep or a reconnect.
+        let haptic = Set(devices.map(\.id))
+        touches?.watch(found.filter { haptic.contains($0.id) }.map(\.device))
     }
 
     /// True when more than one haptic trackpad is connected right now,

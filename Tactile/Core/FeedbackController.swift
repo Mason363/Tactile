@@ -19,7 +19,7 @@ import QuartzCore
 @MainActor
 final class FeedbackController {
     var config: FeedbackConfig {
-        didSet { ActuatorHapticEngine.shared?.target = config.hapticDevice }
+        didSet { applyDeviceRouting() }
     }
 
     /// Feeds the cursor monitor's skip region after each resolution.
@@ -87,6 +87,7 @@ final class FeedbackController {
     private var lastTickTime: CFTimeInterval = 0
     private var dwellTimer: Timer?
     private var vibrateTimer: Timer?
+    private var mouseWatchTimer: Timer?
     private var vibrateStep = 0
     /// True while the actuator's continuous buzz thread is running.
     private var buzzing = false
@@ -113,7 +114,24 @@ final class FeedbackController {
     init(config: FeedbackConfig, languagePacks: LanguagePackRegistry? = nil) {
         self.config = config
         self.languagePacks = languagePacks ?? LanguagePackRegistry()
+        applyDeviceRouting()
+    }
+
+    private func applyDeviceRouting() {
         ActuatorHapticEngine.shared?.target = config.hapticDevice
+        ActuatorHapticEngine.shared?.touches?.setRunning(config.trackpadOnlyHaptics)
+    }
+
+    /// True when hover-driven haptics should be skipped because the cursor
+    /// is being moved by something other than the trackpad: the setting is
+    /// on, no finger has touched a haptic trackpad lately, and touch
+    /// tracking is actually working. The phone has its own motor, so it is
+    /// never muted by what the Mac's trackpad is doing.
+    private var hapticsSuppressed: Bool {
+        guard config.trackpadOnlyHaptics else { return false }
+        if config.hapticDevice == .iphone, PhoneHapticEngine.shared.isAvailable { return false }
+        guard let tracker = ActuatorHapticEngine.shared?.touches, tracker.isReliable else { return false }
+        return !tracker.isTouching
     }
 
     func handle(point: CGPoint, resolved: ResolvedElement?) {
@@ -657,7 +675,11 @@ final class FeedbackController {
         lastTickTime = now
         log.debug("fire reason=\(reason, privacy: .public) steps=\(waveform.steps.count, privacy: .public)")
 
-        player.play(waveform, on: hapticEngine)
+        if hapticsSuppressed {
+            player.cancel()
+        } else {
+            player.play(waveform, on: hapticEngine)
+        }
         onFire?()
 
         let soundName: String?
@@ -699,8 +721,9 @@ final class FeedbackController {
     /// limit governs discrete events, and the click sound stays out of it
     /// entirely. The vibration mode shapes the gaps between pulses.
     private func startVibrationIfEnabled() {
-        guard config.vibrateOnHover else { return }
+        guard config.vibrateOnHover, !hapticsSuppressed else { return }
         stopVibration()
+        watchForMouse()
         // With the actuator available, the buzz runs on its own thread - the
         // only way to hold pulse rates high enough (up to 250/sec) to feel
         // like one continuous vibration instead of a series of taps.
@@ -739,7 +762,23 @@ final class FeedbackController {
         vibrateTimer = timer
     }
 
+    /// A hover vibration outlives the move that started it, so when a mouse
+    /// takes over from the trackpad mid-vibration it has to be cut short.
+    private func watchForMouse() {
+        guard config.trackpadOnlyHaptics else { return }
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.hapticsSuppressed else { return }
+                self.stopVibration()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        mouseWatchTimer = timer
+    }
+
     private func stopVibration() {
+        mouseWatchTimer?.invalidate()
+        mouseWatchTimer = nil
         if buzzing {
             ActuatorHapticEngine.shared?.stopTone()
             buzzing = false
