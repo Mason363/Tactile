@@ -22,6 +22,19 @@
         5. Set SUPublicEDKey in Info.plist to the matching public key.
     -->
     <item>
+      <title>Tactile 1.1.4</title>
+      <pubDate>Sun, 11 Oct 2026 23:28:54 +0000</pubDate>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <sparkle:minimumAutoupdateVersion>4</sparkle:minimumAutoupdateVersion>
+      <description><![CDATA[<p><strong>Haptics only from the trackpad.</strong> If you use an external mouse next to your trackpad, turn on Only when using the trackpad in Settings, Haptics: the trackpad ticks as usual and the mouse stays still. Sounds and the visual flash still play. Thanks to oenderg for this feature.</p><ul><li>Fixed a freeze when dragging the settings window while Rectangle or another window manager with drag to snap is running.</li></ul>]]></description>
+      <enclosure url="https://github.com/Mason363/Tactile/releases/download/v1.1.4/Tactile-1.1.4.zip"
+                 sparkle:version="9"
+                 sparkle:shortVersionString="1.1.4"
+                 length="3652069"
+                 sparkle:edSignature="NB6FEFKzFi3ayPXYkBVhimepKazRs0q2xEqKZM9L0peQgfJCASu6kGs70/oKPa2fi6DDA1Ds1xfIifyqBtfPBA=="
+                 type="application/octet-stream" />
+    </item>
+    <item>
       <title>Tactile 1.1.2</title>
       <pubDate>Sun, 13 Sep 2026 03:35:09 +0000</pubDate>
       <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
