@@ -234,9 +234,10 @@ check.
   to the Coast app on this Mac; any networking to the phone is Coast's, not
   Tactile's.
 - **Auditable.** The few private functions (the trackpad actuator and
-  finger-contact frames via MultitouchSupport, the System Audio Recording permission check, and matching
-  an app's audio helper to the app) are loaded at runtime with `dlopen` and
-  fall back safely; everything else is public API. The whole source is here.
+  finger-contact frames via MultitouchSupport, the System Audio Recording
+  permission check, and matching an app's audio helper to the app) are
+  loaded at runtime with `dlopen` and fall back safely; everything else is
+  public API. The whole source is here.
 
 ## License
 

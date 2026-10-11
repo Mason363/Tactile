@@ -97,6 +97,7 @@ final class ActuatorHapticEngine: FeedbackEngine {
         playActuation = dlsym(handle, "MTActuationActuate").map { unsafeBitCast($0, to: PlayActuationFunc.self) }
         createActuation = dlsym(handle, "MTActuationCreateFromDictionary").map { unsafeBitCast($0, to: CreateActuationFunc.self) }
 
+        touches?.rescan = { [weak self] in self?.refreshDevices() }
         refreshDevices()
         if devices.isEmpty, let actuator = create(Self.legacyDeviceID) {
             if openActuator(actuator) == 0 {
@@ -141,13 +142,15 @@ final class ActuatorHapticEngine: FeedbackEngine {
             guard let actuator = create(candidate.id) else { continue }
             if openActuator(actuator) == 0 {
                 devices.append(Device(id: candidate.id, isBuiltIn: candidate.isBuiltIn, actuator: actuator, present: true))
-                // Kept alive for good, like the actuator: the touch tracker
-                // may hold it for as long as the app runs.
-                touches?.add(Unmanaged.passRetained(candidate.device).toOpaque())
             } else {
                 Unmanaged<AnyObject>.fromOpaque(actuator).release()
             }
         }
+
+        // The touch tracker gets this scan's objects for every haptic
+        // trackpad: older ones stop reporting after sleep or a reconnect.
+        let haptic = Set(devices.map(\.id))
+        touches?.watch(found.filter { haptic.contains($0.id) }.map(\.device))
     }
 
     /// True when more than one haptic trackpad is connected right now,
