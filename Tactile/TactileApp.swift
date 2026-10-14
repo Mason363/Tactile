@@ -69,4 +69,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             OnboardingWindow.show(controller: controller)
         }
     }
+
+    /// Opening the app again while it is running (Finder, Spotlight, the
+    /// Dock) has no window to bring forward, so show the settings, or the
+    /// onboarding while Accessibility is still missing.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        let controller = AppController.shared
+        if controller.permission.isTrusted {
+            SettingsWindow.show(controller: controller)
+        } else {
+            OnboardingWindow.show(controller: controller)
+        }
+        return false
+    }
 }
