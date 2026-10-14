@@ -21,7 +21,7 @@ import QuartzCore
 /// surface is never watched. Nothing is started until `setRunning(true)`.
 ///
 /// Device objects stop reporting after the Mac sleeps or a trackpad
-/// reconnects, so while running the tracker asks for a fresh scan on wake
+/// reconnects, so the tracker asks for a fresh scan when it starts, on wake,
 /// and whenever a multitouch device attaches.
 @MainActor
 final class TrackpadTouchTracker {
@@ -51,6 +51,19 @@ final class TrackpadTouchTracker {
     /// When listening last (re)started. Only a contact frame after this
     /// proves frames are reaching us; `.infinity` while nothing is trusted.
     private var armedAt: CFTimeInterval = .infinity
+
+    /// Whether the watched objects came from a scan made while listening.
+    /// Older ones can stay quiet after a sleep or a reconnect.
+    private var fresh = false
+
+    /// Whether contact frames have reached Tactile on this macOS build. A
+    /// framework change could start every device and deliver nothing, so
+    /// until then only a touch makes "no frames" mean "no finger".
+    private static let framesKey = "trackpadFramesBuild"
+    private static let systemBuild = ProcessInfo.processInfo.operatingSystemVersionString
+    private static var framesProven = UserDefaults.standard.string(forKey: framesKey) == systemBuild {
+        didSet { UserDefaults.standard.set(systemBuild, forKey: framesKey) }
+    }
 
     /// Asks `ActuatorHapticEngine` to scan again; it answers with `watch(_:)`.
     var rescan: (() -> Void)?
@@ -84,6 +97,7 @@ final class TrackpadTouchTracker {
     func watch(_ found: [AnyObject]) {
         if running { devices.forEach(end) }
         devices = found
+        fresh = running
         if running { devices.forEach(begin) }
     }
 
@@ -94,9 +108,12 @@ final class TrackpadTouchTracker {
         if on {
             armedAt = CACurrentMediaTime()
             devices.forEach(begin)
+            // The last scan may predate a sleep; a new one makes them fresh.
+            rescan?()
             observeDeviceChanges()
         } else {
             armedAt = .infinity
+            fresh = false
             devices.forEach(end)
             stopObservingDeviceChanges()
         }
@@ -114,11 +131,20 @@ final class TrackpadTouchTracker {
         stop(handle)
     }
 
-    /// True once a finger has been seen since listening last started.
-    /// Until then "no finger" could just as well mean "no frames" (a
-    /// trackpad still waking, a framework change), and haptics must not
-    /// be silenced on a guess.
-    var isReliable: Bool { running && !devices.isEmpty && TouchClock.shared.last > armedAt }
+    /// True once "no finger" can be believed: a finger was seen since
+    /// listening (re)started, or the objects are fresh and frames have
+    /// reached Tactile on this macOS build, so a mouse-only session works
+    /// without touching the trackpad. Until then "no frames" could just as
+    /// well mean a trackpad still waking, and haptics must not be silenced
+    /// on a guess.
+    var isReliable: Bool {
+        guard running, !devices.isEmpty, armedAt != .infinity else { return false }
+        if TouchClock.shared.last > armedAt {
+            if !Self.framesProven { Self.framesProven = true }
+            return true
+        }
+        return fresh && Self.framesProven
+    }
 
     /// Whether a finger touched the trackpad within the grace period.
     var isTouching: Bool { CACurrentMediaTime() - TouchClock.shared.last < Self.grace }
@@ -133,6 +159,7 @@ final class TrackpadTouchTracker {
                 guard let self else { return }
                 // The old objects may have gone quiet during sleep.
                 self.armedAt = .infinity
+                self.fresh = false
                 self.scheduleRescan()
             }
         }
@@ -146,7 +173,10 @@ final class TrackpadTouchTracker {
                 TrackpadTouchTracker.drain(iterator)
                 guard let refcon else { return }
                 let tracker = Unmanaged<TrackpadTouchTracker>.fromOpaque(refcon).takeUnretainedValue()
-                MainActor.assumeIsolated { tracker.scheduleRescan() }
+                MainActor.assumeIsolated {
+                    tracker.fresh = false
+                    tracker.scheduleRescan()
+                }
             },
             Unmanaged.passUnretained(self).toOpaque(), &iterator
         )
