@@ -22,6 +22,19 @@
         5. Set SUPublicEDKey in Info.plist to the matching public key.
     -->
     <item>
+      <title>Tactile 1.1.5</title>
+      <pubDate>Wed, 14 Oct 2026 16:57:35 +0000</pubDate>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <sparkle:minimumAutoupdateVersion>4</sparkle:minimumAutoupdateVersion>
+      <description><![CDATA[<p><strong>Trackpad-only haptics, right away.</strong> With Only when using the trackpad on, the mouse now stays still from launch and after waking, without touching the trackpad first.</p><ul><li>Opening Tactile again while it runs now shows its settings.</li></ul><p>Thanks to oenderg.</p>]]></description>
+      <enclosure url="https://github.com/Mason363/Tactile/releases/download/v1.1.5/Tactile-1.1.5.zip"
+                 sparkle:version="10"
+                 sparkle:shortVersionString="1.1.5"
+                 length="3633160"
+                 sparkle:edSignature="p9ygl8ROI1aRjm2xu4h1AyqghRQwqw8xVWvWRdVgPMTxEDtBUl03waOWvQM2LvIoqhAvtSa1XdmTP7lP9xP6CA=="
+                 type="application/octet-stream" />
+    </item>
+    <item>
       <title>Tactile 1.1.4</title>
       <pubDate>Sun, 11 Oct 2026 23:28:54 +0000</pubDate>
       <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
