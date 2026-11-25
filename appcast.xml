@@ -22,6 +22,19 @@
         5. Set SUPublicEDKey in Info.plist to the matching public key.
     -->
     <item>
+      <title>Tactile 1.2.0</title>
+      <pubDate>Wed, 25 Nov 2026 04:19:14 +0000</pubDate>
+      <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
+      <sparkle:minimumAutoupdateVersion>4</sparkle:minimumAutoupdateVersion>
+      <description><![CDATA[<p><strong>A haptic mouse.</strong> Tactile now works with the Logitech MX Master 4 on its Logi Bolt receiver. Pick it in General, under Devices, and every tick plays through the motor under your thumb. No Logitech software or extra permission is needed.</p><p><strong>Make haptics by tapping them.</strong> The new haptic editor turns a rhythm you tap into a haptic, and lets you shape pulses on a timeline.</p><ul><li>Every haptic choice now shows the waveform's shape.</li><li>Haptic Studio is a gallery, and the settings sidebar is regrouped.</li></ul>]]></description>
+      <enclosure url="https://github.com/Mason363/Tactile/releases/download/v1.2.0/Tactile-1.2.0.zip"
+                 sparkle:version="11"
+                 sparkle:shortVersionString="1.2.0"
+                 length="3852363"
+                 sparkle:edSignature="2bUTth2bE4ihLBYIJeDveEngXt2hsiaKDiXMrTvNbvFBcld3xpzR8i/YVds0ULIWxzJZIDt7ezcGJdNo7EbHBA=="
+                 type="application/octet-stream" />
+    </item>
+    <item>
       <title>Tactile 1.1.5</title>
       <pubDate>Wed, 14 Oct 2026 16:57:35 +0000</pubDate>
       <sparkle:minimumSystemVersion>14.6</sparkle:minimumSystemVersion>
