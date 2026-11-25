@@ -97,10 +97,14 @@ final class FeedbackController {
     /// public API always reaches every connected trackpad at once. The
     /// iPhone choice routes through Coast's bridge while the phone is
     /// reachable, and degrades to the trackpad engines (never to silence)
-    /// while it isn't.
+    /// while it isn't. A haptic mouse takes the tick while it answers and
+    /// no finger is on a trackpad.
     private var hapticEngine: FeedbackEngine {
         if config.hapticDevice == .iphone, PhoneHapticEngine.shared.isAvailable {
             return PhoneHapticEngine.shared
+        }
+        if MouseHapticEngine.shared.carriesTick {
+            return MouseHapticEngine.shared
         }
         if let actuator = ActuatorHapticEngine.shared,
            config.useEnhancedHaptics || config.hapticDevice.isTrackpadSpecific {
@@ -117,19 +121,26 @@ final class FeedbackController {
         applyDeviceRouting()
     }
 
-    private func applyDeviceRouting() {
+    /// Also called when a haptic mouse connects or leaves.
+    func applyDeviceRouting() {
         ActuatorHapticEngine.shared?.target = config.hapticDevice
-        ActuatorHapticEngine.shared?.touches?.setRunning(config.trackpadOnlyHaptics)
+        let mouse = MouseHapticEngine.shared
+        mouse.target = config.hapticDevice
+        // A chosen mouse shares the hand with the trackpad: whichever the
+        // hand is on ticks, which takes knowing when a finger is down.
+        let followsHand = config.hapticDevice == .mouse && mouse.isConnected
+        ActuatorHapticEngine.shared?.touches?.setRunning(config.trackpadOnlyHaptics || followsHand)
     }
 
     /// True when hover-driven haptics should be skipped because the cursor
     /// is being moved by something other than the trackpad: the setting is
     /// on, no finger has touched a haptic trackpad lately, and touch
-    /// tracking is actually working. The phone has its own motor, so it is
-    /// never muted by what the Mac's trackpad is doing.
+    /// tracking is actually working. The phone and the mouse have their own
+    /// motors, so they are never muted by what the Mac's trackpad is doing.
     private var hapticsSuppressed: Bool {
         guard config.trackpadOnlyHaptics else { return false }
         if config.hapticDevice == .iphone, PhoneHapticEngine.shared.isAvailable { return false }
+        if MouseHapticEngine.shared.carriesTick { return false }
         guard let tracker = ActuatorHapticEngine.shared?.touches, tracker.isReliable else { return false }
         return !tracker.isTouching
     }

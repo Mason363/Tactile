@@ -33,8 +33,8 @@ struct LocalizationRuntimeTests {
         expect(zh.plural("format.lines", count: 1) == "1 行", "Chinese lines")
         expect(zh.format("feedback.hover-caption.with-label", "Save", zh.string("feedback.category.button.caption"))
                == "Save · 按钮", "External label remains verbatim")
-        expect(en.format("a11y.waveform.edit", "Buttons") == "Edit waveform for Buttons",
-               "English edit label names the waveform")
+        expect(en.format("a11y.waveform.for", "Buttons") == "Waveform for Buttons",
+               "English chooser label names the waveform")
         expect(en.format("a11y.waveform.try", "Links") == "Try waveform for Links",
                "English try label names the waveform")
         expect(en.string("a11y.menu-bar.permission-needed").hasPrefix("Tactile"),

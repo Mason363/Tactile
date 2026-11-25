@@ -11,9 +11,10 @@ struct MenuBarView: View {
     @EnvironmentObject private var permission: PermissionManager
     @EnvironmentObject private var localization: LocalizationController
     @ObservedObject private var updater = Updater.shared
+    @ObservedObject private var mouse = MouseHapticEngine.shared
 
     var body: some View {
-        if !ActuatorHapticEngine.hasHapticTrackpad {
+        if !ActuatorHapticEngine.hasHapticTrackpad, !mouse.isConnected {
             Label(localization.localizer.string("menu.no-haptic-trackpad"), systemImage: "exclamationmark.triangle.fill")
             Text(verbatim: localization.localizer.string("menu.trackpad-requirement"))
             Divider()

@@ -130,10 +130,11 @@ enum VibrationMode: String, CaseIterable, Identifiable {
 }
 
 /// Which connected device feels the haptics. Offered when more than one
-/// haptic trackpad is present (a MacBook with a Magic Trackpad paired) or
-/// an iPhone running Coast is reachable. Routing to one trackpad goes
-/// through the actuator engine, since the public haptics API reaches every
-/// trackpad at once; the iPhone routes through Coast's local bridge.
+/// haptic trackpad is present (a MacBook with a Magic Trackpad paired), an
+/// iPhone running Coast is reachable, or a mouse with a haptic motor is
+/// connected. Routing to one trackpad goes through the actuator engine,
+/// since the public haptics API reaches every trackpad at once; the iPhone
+/// routes through Coast's local bridge, the mouse over its own HID channel.
 enum HapticDeviceTarget: String, CaseIterable, Identifiable {
     case all
     case builtIn
@@ -141,6 +142,10 @@ enum HapticDeviceTarget: String, CaseIterable, Identifiable {
     /// An iPhone connected to this Mac through Coast. Offered only while
     /// one is reachable; degrades back to the trackpads when it isn't.
     case iphone
+    /// A mouse with a haptic motor (Logitech MX Master 4). The choice
+    /// stays while the mouse is away, and feedback returns to the
+    /// trackpads until it is back.
+    case mouse
 
     var id: String { rawValue }
 

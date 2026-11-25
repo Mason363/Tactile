@@ -77,10 +77,12 @@ struct MusicSettingsView: View {
     }
 
     /// A true vibration needs the trackpad actuator: enhanced haptics, or
-    /// a specific trackpad chosen as the device.
+    /// a specific trackpad chosen as the device. The phone and the mouse
+    /// tap.
     private var vibrationAvailable: Bool {
         ActuatorHapticEngine.hasHapticTrackpad
             && settings.hapticDevice != .iphone
+            && settings.hapticDevice != .mouse
             && (settings.useEnhancedHaptics || settings.hapticDevice.isTrackpadSpecific)
     }
 

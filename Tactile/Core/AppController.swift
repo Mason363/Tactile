@@ -153,6 +153,17 @@ final class AppController: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.updateMusic() }
             .store(in: &cancellables)
+        // A haptic mouse connecting, leaving, or going quiet moves both the
+        // ticks and the music.
+        MouseHapticEngine.shared.$isConnected
+            .combineLatest(MouseHapticEngine.shared.$isAvailable)
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.feedback.applyDeviceRouting()
+                self?.updateMusic()
+            }
+            .store(in: &cancellables)
         // Back from System Settings, the audio permission may have changed.
         NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
             .receive(on: DispatchQueue.main)
@@ -287,7 +298,8 @@ final class AppController: ObservableObject {
     }
 
     /// Music haptics follows the settings, the pipeline state, and the
-    /// device choice (a trackpad, all of them, or the Coast phone).
+    /// device choice (a trackpad, all of them, the Coast phone, or a
+    /// haptic mouse).
     private func updateMusic() {
         music.update(
             MusicHaptics.Configuration(
@@ -353,6 +365,9 @@ final class AppController: ObservableObject {
         // and carry the ticks. Local socket client, does nothing when Coast
         // isn't around.
         PhoneHapticEngine.shared.start()
+        // A mouse with a haptic motor, found over its own HID channel.
+        // Waits on the system to report one; nothing polls.
+        MouseHapticEngine.shared.hold(.pipeline)
     }
 
     private func stopPipeline() {
@@ -361,6 +376,7 @@ final class AppController: ObservableObject {
         feedback.reset()
         bridge.stop()
         PhoneHapticEngine.shared.stop()
+        MouseHapticEngine.shared.release(.pipeline)
         indicator.hideAll()
         // isActive is already false: these tear down.
         updateAlerts()

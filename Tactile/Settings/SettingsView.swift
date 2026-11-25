@@ -93,27 +93,30 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $pane) {
+                // What you feel under the cursor and the keys.
                 Section(localization.localizer.string("settings.sidebar.feedback")) {
                     sidebarRow(.general)
                     sidebarRow(.haptics)
+                    sidebarRow(.context)
                     sidebarRow(.vibration)
                     sidebarRow(.keyboard)
+                }
+                // Making haptics, and somewhere to feel them.
+                Section(localization.localizer.string("settings.sidebar.create")) {
+                    sidebarRow(.studio)
+                    sidebarRow(.playground)
+                }
+                // Sound turned into touch, and touch turned into sight.
+                Section(localization.localizer.string("settings.sidebar.senses")) {
                     sidebarRow(.music)
                     sidebarRow(.alerts)
-                    sidebarRow(.studio)
-                    sidebarRow(.context)
-                    sidebarRow(.visual)
                     sidebarRow(.sound)
+                    sidebarRow(.visual)
                 }
                 Section(localization.localizer.string("settings.sidebar.system")) {
                     sidebarRow(.performance)
                     sidebarRow(.apps)
                     sidebarRow(.profiles)
-                }
-                Section(localization.localizer.string("settings.sidebar.try-it")) {
-                    sidebarRow(.playground)
-                }
-                Section {
                     sidebarRow(.about)
                 }
             }
@@ -125,7 +128,7 @@ struct SettingsView: View {
             }
             .navigationTitle(pane.localizedTitle(using: localization.localizer))
         }
-        .frame(width: 780, height: 560)
+        .frame(width: 780, height: 640)
     }
 
     private func sidebarRow(_ pane: SettingsPane) -> some View {
@@ -133,10 +136,10 @@ struct SettingsView: View {
             Text(verbatim: pane.localizedTitle(using: localization.localizer))
         } icon: {
             Image(systemName: pane.symbol)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.white)
-                .frame(width: 22, height: 22)
-                .background(pane.chipColor.gradient, in: RoundedRectangle(cornerRadius: 6))
+                .frame(width: 20, height: 20)
+                .background(pane.chipColor.gradient, in: RoundedRectangle(cornerRadius: 5.5))
         }
         .tag(pane)
     }
@@ -236,10 +239,12 @@ struct GeneralSettingsView: View {
     @State private var launchAtLogin = LoginItem.isEnabled
     @State private var loginItemError: String?
     /// Device choices to offer, empty unless several trackpads are
-    /// connected or a Coast iPhone is reachable.
+    /// connected, a Coast iPhone is reachable, or a haptic mouse is here.
     @State private var deviceTargets: [HapticDeviceTarget] = []
     /// Coast bridge: publishes the reachable phone's name.
     @ObservedObject private var phone = PhoneHapticEngine.shared
+    /// Publishes the haptic mouse, by its own name, while one is connected.
+    @ObservedObject private var mouse = MouseHapticEngine.shared
 
     var body: some View {
         Form {
@@ -286,15 +291,15 @@ struct GeneralSettingsView: View {
                             phone.tick(.generic)
                             return
                         }
+                        if newValue == .mouse {
+                            mouse.tick(.generic)
+                            return
+                        }
                         guard let engine = ActuatorHapticEngine.shared else { return }
                         engine.target = newValue
                         engine.tick(.generic)
                     }
-                    Text(verbatim: localization.localizer.string(
-                        phone.isAvailable
-                            ? "settings.general.devices.coast-help"
-                            : "settings.general.devices.trackpads-help"
-                    ))
+                    Text(verbatim: localization.localizer.string(devicesHelpKey))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -318,11 +323,16 @@ struct GeneralSettingsView: View {
         }
         .formStyle(.grouped)
         .scrollDisabled(true)
-        .onAppear(perform: refreshDeviceTargets)
+        .onAppear {
+            // A mouse paired since Tactile started shows up on this look.
+            mouse.rescan()
+            refreshDeviceTargets()
+        }
         .onChange(of: phone.phoneName) { _, _ in refreshDeviceTargets() }
+        .onChange(of: mouse.isConnected) { _, _ in refreshDeviceTargets() }
     }
 
-    /// The iPhone entry carries the phone's real name; everything else is
+    /// The iPhone and the mouse carry their real names; everything else is
     /// its fixed label.
     private func label(for target: HapticDeviceTarget) -> String {
         if target == .iphone, let name = phone.phoneName {
@@ -331,11 +341,26 @@ struct GeneralSettingsView: View {
                 arguments: [name]
             )
         }
+        if target == .mouse, let name = mouse.mouseName {
+            return name
+        }
         return target.localizedName(using: localization.localizer)
     }
 
+    /// What the chooser is offering, in a sentence: the mouse when it is
+    /// the pick or the only extra device, else the phone, else trackpads.
+    private var devicesHelpKey: String {
+        if settings.hapticDevice == .mouse || (mouse.isConnected && !phone.isAvailable) {
+            return "settings.general.devices.mouse-help"
+        }
+        return phone.isAvailable
+            ? "settings.general.devices.coast-help"
+            : "settings.general.devices.trackpads-help"
+    }
+
     /// Re-scans the connected devices; the picker exists only while there
-    /// is a real choice: several trackpads, or a Coast iPhone next to them.
+    /// is a real choice: several trackpads, or a Coast iPhone or a haptic
+    /// mouse next to them.
     private func refreshDeviceTargets() {
         var targets: [HapticDeviceTarget] = []
         if let engine = ActuatorHapticEngine.shared {
@@ -351,6 +376,14 @@ struct GeneralSettingsView: View {
             // meaning exactly that, the phone is an explicit pick.
             if targets.isEmpty { targets = [.all] }
             targets.append(.iphone)
+        }
+        // The mouse stays listed while it is the pick, connected or not:
+        // it comes and goes with the desk, and the choice should not.
+        // Where it is the only haptic device there is nothing to choose.
+        let hasOthers = ActuatorHapticEngine.shared != nil || phone.isAvailable
+        if hasOthers, mouse.isConnected || settings.hapticDevice == .mouse {
+            if targets.isEmpty { targets = [.all] }
+            targets.append(.mouse)
         }
         deviceTargets = targets
         if !targets.isEmpty, !targets.contains(settings.hapticDevice) {
@@ -461,7 +494,7 @@ private struct CategoryRow: View {
             WaveformControl(waveform: waveform, accessibilityName: displayName)
                 .disabled(!isEnabled.wrappedValue)
 
-            SoundPicker(selection: sound, accessibilityName: displayName)
+            SoundPicker(selection: sound, accessibilityName: displayName, compact: true)
                 .disabled(!isEnabled.wrappedValue)
         }
         .padding(.vertical, 1)
@@ -474,34 +507,55 @@ struct SoundPicker: View {
     @EnvironmentObject private var localization: LocalizationController
     @Binding var selection: String
     var accessibilityName: String
+    /// A speaker icon that opens the same choices, for rows already
+    /// carrying a waveform. Tinted once a sound of its own is set.
+    var compact = false
 
     var body: some View {
-        Picker(selection: $selection) {
-            Text(verbatim: localization.localizer.string("settings.sound.assignment.default")).tag("default")
-            Text(verbatim: localization.localizer.string("settings.sound.assignment.none")).tag("none")
-            Divider()
-            ForEach(AudioFeedbackEngine.synthSounds, id: \.self) { identifier in
-                Text(verbatim: localizedSoundName(identifier)).tag(identifier)
+        let label = localization.localizer.format(
+            "format.settings.sound.for-element",
+            arguments: [accessibilityName]
+        )
+        if compact {
+            Menu {
+                Picker(selection: $selection) { choices } label: { EmptyView() }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+            } label: {
+                Image(systemName: selection == "none" ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .foregroundStyle(selection == "default" ? Color.secondary : Color.accentColor)
             }
-            Divider()
-            ForEach(AudioFeedbackEngine.availableSounds, id: \.self) { name in
-                Text(verbatim: name).tag(name)
-            }
-            let custom = AudioFeedbackEngine.customSounds()
-            if !custom.isEmpty {
-                Divider()
-                ForEach(custom, id: \.self) { identifier in
-                    Text(verbatim: AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
-                }
-            }
-        } label: {
-            Text(verbatim: localization.localizer.format(
-                "format.settings.sound.for-element",
-                arguments: [accessibilityName]
-            ))
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(label)
+            .accessibilityLabel(Text(verbatim: label))
+        } else {
+            Picker(selection: $selection) { choices } label: { Text(verbatim: label) }
+                .labelsHidden()
+                .fixedSize()
         }
-        .labelsHidden()
-        .fixedSize()
+    }
+
+    @ViewBuilder
+    private var choices: some View {
+        Text(verbatim: localization.localizer.string("settings.sound.assignment.default")).tag("default")
+        Text(verbatim: localization.localizer.string("settings.sound.assignment.none")).tag("none")
+        Divider()
+        ForEach(AudioFeedbackEngine.synthSounds, id: \.self) { identifier in
+            Text(verbatim: localizedSoundName(identifier)).tag(identifier)
+        }
+        Divider()
+        ForEach(AudioFeedbackEngine.availableSounds, id: \.self) { name in
+            Text(verbatim: name).tag(name)
+        }
+        let custom = AudioFeedbackEngine.customSounds()
+        if !custom.isEmpty {
+            Divider()
+            ForEach(custom, id: \.self) { identifier in
+                Text(verbatim: AudioFeedbackEngine.displayName(for: identifier)).tag(identifier)
+            }
+        }
     }
 
     private func localizedSoundName(_ identifier: String) -> String {
@@ -627,9 +681,13 @@ private struct HoldToFeelButton: View {
 
     private func start() {
         buzzing = true
-        // The phone target buzzes over the timer path, like the pipeline:
-        // the actuator's dedicated thread only reaches trackpads.
+        // The phone and the mouse buzz over the timer path, like the
+        // pipeline: the actuator's dedicated thread only reaches trackpads.
         if settings.hapticDevice == .iphone, PhoneHapticEngine.shared.isAvailable {
+            scheduleTick()
+            return
+        }
+        if MouseHapticEngine.shared.carriesTick {
             scheduleTick()
             return
         }
@@ -656,10 +714,13 @@ private struct HoldToFeelButton: View {
             Task { @MainActor in
                 guard buzzing else { return }
                 // Route each pulse where the live pipeline would: the Coast
-                // phone when targeted and reachable, a specific trackpad
-                // through the actuator, else the system engine.
+                // phone when targeted and reachable, a haptic mouse in the
+                // hand, a specific trackpad through the actuator, else the
+                // system engine.
                 if settings.hapticDevice == .iphone, PhoneHapticEngine.shared.isAvailable {
                     PhoneHapticEngine.shared.tick(settings.vibratePattern)
+                } else if MouseHapticEngine.shared.carriesTick {
+                    MouseHapticEngine.shared.tick(settings.vibratePattern)
                 } else if settings.hapticDevice.isTrackpadSpecific,
                           let actuator = ActuatorHapticEngine.shared {
                     actuator.tick(settings.vibratePattern)

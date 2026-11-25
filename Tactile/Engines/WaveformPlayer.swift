@@ -19,12 +19,12 @@ final class WaveformPlayer {
         var fireAt: TimeInterval = 0
         for (index, step) in waveform.steps.enumerated() {
             if index == 0 {
-                Self.fire(step, on: engine)
+                Self.fire(step, on: engine, isFirst: true)
             } else {
                 let timer = Timer(timeInterval: fireAt, repeats: false) { [weak self] _ in
                     Task { @MainActor [weak self] in
                         guard let engine = self?.engine else { return }
-                        Self.fire(step, on: engine)
+                        Self.fire(step, on: engine, isFirst: false)
                     }
                 }
                 RunLoop.main.add(timer, forMode: .common)
@@ -35,12 +35,16 @@ final class WaveformPlayer {
     }
 
     /// A held note where the trackpad can sound one, a tap everywhere else.
-    /// The phone and the public engine have no way to play a pitch, so a
-    /// note degrades to a tap of the same strength rather than silence.
+    /// The phone, the mouse, and the public engine have no way to play a
+    /// pitch, so a note degrades to a tap of the same strength rather than
+    /// silence. The mouse is told which taps continue a waveform, so it can
+    /// keep their rhythm.
     @MainActor
-    private static func fire(_ step: WaveformStep, on engine: FeedbackEngine) {
+    private static func fire(_ step: WaveformStep, on engine: FeedbackEngine, isFirst: Bool) {
         if let hz = step.hz, let actuator = engine as? ActuatorHapticEngine {
             actuator.playTone(hz: hz, level: step.level, milliseconds: step.toneMs ?? 120)
+        } else if !isFirst, let mouse = engine as? MouseHapticEngine {
+            mouse.step(step.effectiveStrength)
         } else {
             engine.tick(step.effectiveStrength)
         }

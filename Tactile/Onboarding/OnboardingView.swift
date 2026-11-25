@@ -11,6 +11,8 @@ import Combine
 struct OnboardingView: View {
     @EnvironmentObject private var permission: PermissionManager
     @EnvironmentObject private var localization: LocalizationController
+    /// A mouse with a haptic motor counts where there is no haptic trackpad.
+    @ObservedObject private var mouse = MouseHapticEngine.shared
 
     var body: some View {
         VStack(spacing: 16) {
@@ -24,7 +26,7 @@ struct OnboardingView: View {
             ))
                 .font(.title.bold())
 
-            if !ActuatorHapticEngine.hasHapticTrackpad {
+            if !ActuatorHapticEngine.hasHapticTrackpad, !mouse.isConnected {
                 Label {
                     Text(verbatim: localization.localizer.string("onboarding.no-haptic-trackpad"))
                         .fixedSize(horizontal: false, vertical: true)
@@ -98,8 +100,16 @@ struct OnboardingView: View {
         }
         .padding(28)
         .frame(width: 440)
-        .onAppear { permission.beginPolling() }
-        .onDisappear { permission.endPolling() }
+        .onAppear {
+            permission.beginPolling()
+            // The pipeline, which normally watches for the mouse, is not
+            // running before the permission is granted.
+            if !ActuatorHapticEngine.hasHapticTrackpad { mouse.hold(.onboarding) }
+        }
+        .onDisappear {
+            permission.endPolling()
+            mouse.release(.onboarding)
+        }
     }
 }
 

@@ -10,11 +10,12 @@ import os
 // MARK: - Output
 
 /// Where the music is felt: the same routing as the feedback pipeline (the
-/// Coast phone, the chosen trackpads through the actuator, or the public
-/// engine), callable from any thread.
+/// Coast phone, a haptic mouse, the chosen trackpads through the actuator,
+/// or the public engine), callable from any thread.
 nonisolated struct HapticPulser: Sendable {
     enum Route: Sendable {
         case phone
+        case mouse(MouseHapticEngine.Pulser)
         case actuator(ActuatorHapticEngine.Pulser)
         case system
         #if DEBUG
@@ -66,6 +67,8 @@ nonisolated struct HapticPulser: Sendable {
                     PhoneHapticEngine.shared.pulse(intensity: intensity, sharpness: sharpness)
                 }
             }
+        case .mouse(let pulser):
+            pulser.accent(strength: strength)
         case .system:
             let pattern: NSHapticFeedbackManager.FeedbackPattern = strength > 0.66 ? .levelChange : strength > 0.33 ? .generic : .alignment
             DispatchQueue.main.async {
@@ -85,6 +88,12 @@ extension HapticPulser {
     static func current(device: HapticDeviceTarget, enhanced: Bool) -> HapticPulser {
         if device == .iphone, PhoneHapticEngine.shared.isAvailable {
             return HapticPulser(route: .phone)
+        }
+        // Music does not follow the hand tick by tick: it plays where the
+        // choice says, on the mouse while it answers.
+        let mouse = MouseHapticEngine.shared
+        if mouse.isWanted, mouse.isAvailable {
+            return HapticPulser(route: .mouse(mouse.makePulser()))
         }
         if let actuator = ActuatorHapticEngine.shared, enhanced || device.isTrackpadSpecific {
             return HapticPulser(route: .actuator(actuator.makePulser()))

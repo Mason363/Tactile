@@ -8,19 +8,22 @@
 "a11y.menu-bar.permission-needed" = "Tactile，需要辅助功能权限";
 "a11y.menu-bar.tactile" = "Tactile 菜单栏图标";
 "a11y.settings.about.made-by" = "由 Mason Chen 用心制作";
+"a11y.settings.studio.customize" = "自定义 %@";
+"a11y.settings.studio.edit" = "编辑 %@";
+"a11y.settings.studio.more" = "%@ 的更多操作";
+"a11y.settings.studio.try" = "试用 %@";
 /* %@ = the user-defined haptic name. */
-"a11y.settings.studio.delete" = "删除“%@”";
 /* %@ = the user-defined haptic name. */
-"a11y.settings.studio.duplicate" = "复制“%@”";
 "a11y.settings.vibration.hold-to-feel" = "按住以感受振动";
 "a11y.settings.visual.preview" = "光标圆环和元素高亮实时预览";
 "a11y.sound-import-crop-end" = "裁剪结束位置";
 "a11y.sound-import-crop-start" = "裁剪开始位置";
 /* %@ = the already-localized waveform control name. */
-"a11y.waveform.edit" = "编辑 %@ 的波形";
 /* %@ = the already-localized waveform control name. */
 "a11y.waveform.for" = "%@ 的波形";
 "a11y.waveform.remove-pulse" = "移除脉冲";
+"a11y.waveform.tap-pad" = "敲击板";
+"a11y.waveform.timeline" = "波形时间线";
 /* %@ = the already-localized waveform control name. */
 "a11y.waveform.try" = "试用 %@ 的波形";
 
@@ -155,8 +158,8 @@
 "format.waveform.percent" = "%d%%";
 /* %d = the one-based pulse number. */
 "format.waveform.pulse-number" = "脉冲 %d";
+"format.waveform.pulse-value" = "%1$d%%，位于 %2$d 毫秒";
 /* %@ = the translated waveform accessibility name. */
-"format.waveform.title" = "波形：%@";
 "language.pack.display-name" = "简体中文";
 "language.system" = "跟随系统";
 
@@ -164,18 +167,18 @@
 "menu.feel-music" = "感受音乐";
 "menu.grant-accessibility" = "授予辅助功能权限…";
 "menu.haptic-feedback" = "触觉反馈";
-"menu.no-haptic-trackpad" = "未检测到触觉触控板";
+"menu.no-haptic-trackpad" = "未检测到触觉设备";
 "menu.pause-15-minutes" = "暂停 15 分钟";
 "menu.profiles" = "配置方案";
 "menu.quit-tactile" = "退出 Tactile";
 /* %@ = the localized time at which the pause ends. */
 "menu.resume-paused-until" = "恢复（暂停至 %@）";
 "menu.settings" = "设置…";
-"menu.trackpad-requirement" = "Tactile 需要 Force Touch 触控板才能提供触觉反馈。";
+"menu.trackpad-requirement" = "Tactile 需要 Force Touch 触控板或带触觉功能的鼠标才能提供触觉反馈。";
 
 "onboarding.done" = "完成";
 "onboarding.introduction" = "当光标经过可点击元素时，Tactile 会触发触控板的触觉马达，让你不仅看见界面，也能感受到界面。";
-"onboarding.no-haptic-trackpad" = "此 Mac 没有 Force Touch 触控板，因此 Tactile 无法提供触觉反馈。它需要内建 MacBook 触控板或 Magic Trackpad。视觉辅助和点击声仍可正常使用。";
+"onboarding.no-haptic-trackpad" = "此 Mac 没有 Force Touch 触控板，因此 Tactile 无法提供触觉反馈。它需要内建 MacBook 触控板、Magic Trackpad，或带触觉功能的鼠标（例如 Logitech MX Master 4）。视觉辅助和点击声仍可正常使用。";
 "onboarding.open-accessibility-settings" = "打开辅助功能设置";
 "onboarding.permission-explanation" = "Tactile 需要辅助功能权限，才能知道光标下有什么。";
 "onboarding.privacy-explanation" = "所有操作都在你的 Mac 上完成。Tactile 只读取光标下元素的类型，绝不会读取你的内容。";
@@ -209,7 +212,7 @@
 "settings.alerts.sounds.suggested" = "通话";
 "settings.alerts.system.footer" = "Tactile 只留意通知横幅的出现，从不读取其内容。";
 "settings.alerts.system.section" = "系统";
-"settings.alerts.trackpad-note" = "手指放在触控板上才能感受到触觉。也可以改由运行 Coast 的 iPhone 振动（“通用”页）。";
+"settings.alerts.trackpad-note" = "手指放在触控板上才能感受到触觉。也可以改由运行 Coast 的 iPhone 或带触觉功能的鼠标振动（“通用”页）。";
 "settings.apps.browser.description" = "Chrome 位于最前方时，Tactile 会直接读取页面中的可点击元素，包括 macOS 辅助功能无法识别的自定义按钮。需要配套的 Chrome 扩展。";
 "settings.apps.browser.extension-description" = "然后从 Chrome 网上应用店安装配套扩展。它让 Tactile 能够读取浏览器中原本无法识别的按钮。";
 "settings.apps.browser.get-extension" = "获取 Chrome 扩展";
@@ -250,7 +253,9 @@
 "settings.general.device.builtIn.name" = "内建触控板";
 "settings.general.device.external.name" = "Magic Trackpad";
 "settings.general.device.iphone.name" = "iPhone（Coast）";
+"settings.general.device.mouse.name" = "触觉鼠标";
 "settings.general.devices.coast-help" = "运行 Coast 的 iPhone 可以让你在手中而不是指尖下感受到脉冲。如果所选设备断开，反馈会返回触控板。";
+"settings.general.devices.mouse-help" = "带触觉马达的鼠标可以让你在手中感受到脉冲。手指放在触控板上时，改由触控板触发。如果鼠标不在，反馈会返回触控板。";
 "settings.general.devices.picker" = "在哪个设备上感受触觉反馈";
 "settings.general.devices.section" = "设备";
 "settings.general.devices.trackpads-help" = "已连接多个触控板。选择要触发脉冲的触控板；如果它断开，反馈会返回所有触控板。";
@@ -407,10 +412,11 @@
 "settings.profiles.saved-profiles" = "已保存的配置方案";
 "settings.profiles.saved-profiles-help" = "配置方案是所有设置的快照。点击名称可重命名。可在此处或菜单栏中切换。";
 "settings.profiles.update-with-current" = "使用当前设置更新";
+"settings.sidebar.create" = "创作";
 
 "settings.sidebar.feedback" = "反馈";
+"settings.sidebar.senses" = "声音与视觉";
 "settings.sidebar.system" = "系统";
-"settings.sidebar.try-it" = "试用";
 
 "settings.sound-import.cancel" = "取消";
 "settings.sound-import.crop-help" = "拖动两端进行裁剪。较短的片段最适合作为点击声。";
@@ -441,15 +447,14 @@
 "settings.sound.volume" = "音量";
 
 "settings.studio.default-name" = "我的触觉反馈";
-"settings.studio.edit" = "编辑";
-"settings.studio.empty" = "还没有内容。编排你的第一个触觉反馈。";
+"settings.studio.delete" = "删除";
+"settings.studio.duplicate" = "复制";
+"settings.studio.empty" = "还没有内容。创建你的第一个触觉反馈，或从下方的预设开始。";
 "settings.studio.footer" = "在此保存的触觉反馈会出现在所有波形菜单中：元素、键盘、危险操作、滚动等。";
 "settings.studio.name" = "名称";
 "settings.studio.new-haptic" = "新建触觉反馈";
-"settings.studio.saved-haptics" = "已保存的触觉反馈";
-"settings.studio.strength-note" = "强度将使用触控板支持的最接近级别。";
-"settings.studio.waveform-note" = "波形是一系列脉冲。可设置每个脉冲的强度，以及进入下一个脉冲前的暂停时间。";
-"settings.studio.try" = "试用";
+"settings.studio.presets" = "预设";
+"settings.studio.saved-haptics" = "我的触觉反馈";
 
 "settings.vibration.enable" = "悬停时振动";
 "settings.vibration.explanation" = "当光标停留在可点按元素上时，触控板会持续发出一个音。发声期间会占用少量 CPU 和电量。";
@@ -489,12 +494,20 @@
 "settings.visual.preview.empty" = "请在下方开启一项辅助功能以预览";
 
 "waveform.add-pulse" = "添加脉冲";
+"waveform.choices.edit" = "编辑…";
+"waveform.choices.mine" = "我的触觉反馈";
+"waveform.choices.presets" = "预设";
 "waveform.custom" = "自定义";
-"waveform.edit" = "编辑";
+"waveform.editor.clear" = "清空";
+"waveform.editor.hint" = "点按时间线可添加脉冲。拖动脉冲可移动位置或调整强度。";
+"waveform.editor.start-from" = "从这里开始";
+"waveform.editor.tap-done" = "完成敲击";
+"waveform.editor.tap-hint" = "按得越重，脉冲越强；按住可产生持续音。最后一次敲击后片刻自动结束。";
+"waveform.editor.tap-it-out" = "敲出节奏";
+"waveform.editor.tap-prompt" = "在这里敲出你的节奏";
 "waveform.length" = "时长";
 "waveform.note" = "持续音";
-"waveform.pause" = "暂停";
-"waveform.pause-after-pulse" = "脉冲后的暂停";
+"waveform.note.hint" = "持续音会在触控板上保持一个音高，其他设备会将其作为一次轻触播放。";
 "waveform.pitch" = "音高";
 "waveform.play" = "播放";
 "waveform.preset.doubleTap.name" = "双击";
@@ -509,6 +522,7 @@
 "waveform.preset.tap.name" = "点击";
 "waveform.preset.tripleTap.name" = "三击";
 "waveform.strength" = "强度";
+"waveform.tap" = "轻触";
 "waveform.tap-or-note" = "轻触或持续音";
 "waveform.try" = "试用";
 

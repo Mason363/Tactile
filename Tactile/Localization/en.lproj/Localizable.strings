@@ -6,19 +6,22 @@
 "a11y.menu-bar.permission-needed" = "Tactile, accessibility access needed";
 "a11y.menu-bar.tactile" = "Tactile";
 "a11y.settings.about.made-by" = "Made with love by Mason Chen";
+"a11y.settings.studio.customize" = "Customize %@";
+"a11y.settings.studio.edit" = "Edit %@";
+"a11y.settings.studio.more" = "More for %@";
+"a11y.settings.studio.try" = "Try %@";
 // Dynamic format; printf signature: %@
-"a11y.settings.studio.delete" = "Delete %@";
 // Dynamic format; printf signature: %@
-"a11y.settings.studio.duplicate" = "Duplicate %@";
 "a11y.settings.vibration.hold-to-feel" = "Hold to feel the vibration";
 "a11y.settings.visual.preview" = "Live preview of the cursor circle and element highlight";
 "a11y.sound-import-crop-end" = "Crop end";
 "a11y.sound-import-crop-start" = "Crop start";
 // Dynamic format; printf signature: %@
-"a11y.waveform.edit" = "Edit waveform for %@";
 // Dynamic format; printf signature: %@
 "a11y.waveform.for" = "Waveform for %@";
 "a11y.waveform.remove-pulse" = "Remove pulse";
+"a11y.waveform.tap-pad" = "Tap pad";
+"a11y.waveform.timeline" = "Waveform timeline";
 // Dynamic format; printf signature: %@
 "a11y.waveform.try" = "Try waveform for %@";
 "dialog.alerts.choose-apps.message" = "Choose apps whose sounds you want to feel";
@@ -147,25 +150,25 @@
 "format.waveform.percent" = "%d%%";
 // Dynamic format; printf signature: %d
 "format.waveform.pulse-number" = "Pulse %d";
+"format.waveform.pulse-value" = "%1$d%% at %2$d ms";
 // Dynamic format; printf signature: %@
-"format.waveform.title" = "Waveform: %@";
 "language.pack.display-name" = "English";
 "language.system" = "System";
 "menu.check-for-updates" = "Check for Updates…";
 "menu.feel-music" = "Feel Music";
 "menu.grant-accessibility" = "Grant Accessibility Access…";
 "menu.haptic-feedback" = "Haptic Feedback";
-"menu.no-haptic-trackpad" = "No haptic trackpad detected";
+"menu.no-haptic-trackpad" = "No haptic device detected";
 "menu.pause-15-minutes" = "Pause for 15 Minutes";
 "menu.profiles" = "Profiles";
 "menu.quit-tactile" = "Quit Tactile";
 // Dynamic format; printf signature: %@
 "menu.resume-paused-until" = "Resume (paused until %@)";
 "menu.settings" = "Settings…";
-"menu.trackpad-requirement" = "Tactile needs a Force Touch trackpad to produce feedback.";
+"menu.trackpad-requirement" = "Tactile needs a Force Touch trackpad or a mouse with haptics to produce feedback.";
 "onboarding.done" = "Done";
 "onboarding.introduction" = "Tactile taps the trackpad's haptic motor whenever your cursor passes over something clickable, so you can feel the interface, not just see it.";
-"onboarding.no-haptic-trackpad" = "This Mac has no Force Touch trackpad, so Tactile cannot produce haptic feedback. It needs a built-in MacBook trackpad or a Magic Trackpad. The visual aids and click sounds still work.";
+"onboarding.no-haptic-trackpad" = "This Mac has no Force Touch trackpad, so Tactile cannot produce haptic feedback. It needs a built-in MacBook trackpad, a Magic Trackpad, or a mouse with haptics such as the Logitech MX Master 4. The visual aids and click sounds still work.";
 "onboarding.open-accessibility-settings" = "Open Accessibility Settings";
 "onboarding.permission-explanation" = "Tactile needs the Accessibility permission to know what is under your cursor.";
 "onboarding.privacy-explanation" = "Everything happens on your Mac. Tactile only looks at the type of element under the cursor, never at your content.";
@@ -197,7 +200,7 @@
 "settings.alerts.sounds.suggested" = "Calls";
 "settings.alerts.system.footer" = "Tactile notices a notification banner appearing, never what it says.";
 "settings.alerts.system.section" = "System";
-"settings.alerts.trackpad-note" = "Haptics are felt with a finger on the trackpad. An iPhone running Coast can carry them instead (General pane).";
+"settings.alerts.trackpad-note" = "Haptics are felt with a finger on the trackpad. An iPhone running Coast or a mouse with haptics can carry them instead (General pane).";
 "settings.apps.browser.description" = "While Chrome is frontmost, Tactile reads clickable elements from the page itself, including custom buttons invisible to macOS accessibility. Requires the companion Chrome extension.";
 "settings.apps.browser.extension-description" = "Then install the companion extension from the Chrome Web Store. It lets Tactile read buttons it would otherwise miss in the browser.";
 "settings.apps.browser.get-extension" = "Get the Chrome extension";
@@ -236,7 +239,9 @@
 "settings.general.device.builtIn.name" = "Built-in trackpad";
 "settings.general.device.external.name" = "Magic Trackpad";
 "settings.general.device.iphone.name" = "iPhone (Coast)";
+"settings.general.device.mouse.name" = "Haptic mouse";
 "settings.general.devices.coast-help" = "An iPhone running Coast can feel the ticks in your hand instead of under your finger. If the chosen device disconnects, feedback returns to the trackpads.";
+"settings.general.devices.mouse-help" = "A mouse with a haptic motor ticks in your hand. While a finger is on the trackpad, the trackpad ticks instead. If the mouse is away, feedback returns to the trackpads.";
 "settings.general.devices.picker" = "Feel haptics on";
 "settings.general.devices.section" = "Devices";
 "settings.general.devices.trackpads-help" = "Several haptic trackpads are connected. Choose which one ticks; if it disconnects, feedback returns to all of them.";
@@ -387,9 +392,10 @@
 "settings.profiles.saved-profiles" = "Saved Profiles";
 "settings.profiles.saved-profiles-help" = "A profile is a snapshot of every setting. Click a name to rename it. Switch here or from the menu bar.";
 "settings.profiles.update-with-current" = "Update with Current Settings";
+"settings.sidebar.create" = "Create";
 "settings.sidebar.feedback" = "Feedback";
+"settings.sidebar.senses" = "Sound & Sight";
 "settings.sidebar.system" = "System";
-"settings.sidebar.try-it" = "Try It";
 "settings.sound-import.cancel" = "Cancel";
 "settings.sound-import.crop-help" = "Drag the edges to crop. Short clips work best as clicks.";
 "settings.sound-import.play" = "Play";
@@ -417,15 +423,14 @@
 "settings.sound.vary-tone" = "Vary the tone a little on each click";
 "settings.sound.volume" = "Volume";
 "settings.studio.default-name" = "My Haptic";
-"settings.studio.edit" = "Edit";
-"settings.studio.empty" = "Nothing here yet. Compose your first haptic.";
+"settings.studio.delete" = "Delete";
+"settings.studio.duplicate" = "Duplicate";
+"settings.studio.empty" = "Nothing here yet. Make your first haptic, or start from a preset below.";
 "settings.studio.footer" = "Anything saved here shows up in every waveform menu: elements, keyboard, danger, scrolling, all of them.";
 "settings.studio.name" = "Name";
 "settings.studio.new-haptic" = "New Haptic";
-"settings.studio.saved-haptics" = "Saved haptics";
-"settings.studio.strength-note" = "Strength plays at the nearest level your trackpad supports.";
-"settings.studio.try" = "Try";
-"settings.studio.waveform-note" = "A waveform is a sequence of pulses. Set each pulse's strength and the pause before the next one.";
+"settings.studio.presets" = "Presets";
+"settings.studio.saved-haptics" = "My Haptics";
 "settings.vibration.enable" = "Vibrate while hovering";
 "settings.vibration.explanation" = "Holds a note on the trackpad for as long as the cursor rests on a clickable element. Uses a little CPU and battery while it sounds.";
 "settings.vibration.mode.heartbeat.name" = "Heartbeat";
@@ -462,12 +467,20 @@
 "settings.visual.preview.delete-caption" = "Delete · Button";
 "settings.visual.preview.empty" = "Turn on an aid below to preview it";
 "waveform.add-pulse" = "Add Pulse";
+"waveform.choices.edit" = "Edit…";
+"waveform.choices.mine" = "My Haptics";
+"waveform.choices.presets" = "Presets";
 "waveform.custom" = "Custom";
-"waveform.edit" = "Edit";
+"waveform.editor.clear" = "Clear";
+"waveform.editor.hint" = "Click the timeline to add a pulse. Drag a pulse to move it or change its strength.";
+"waveform.editor.start-from" = "Start from";
+"waveform.editor.tap-done" = "Done Tapping";
+"waveform.editor.tap-hint" = "Press harder for a stronger pulse, hold for a note. It ends a moment after your last tap.";
+"waveform.editor.tap-it-out" = "Tap It Out";
+"waveform.editor.tap-prompt" = "Tap your rhythm here";
 "waveform.length" = "Length";
 "waveform.note" = "Note";
-"waveform.pause" = "Pause";
-"waveform.pause-after-pulse" = "Pause after pulse";
+"waveform.note.hint" = "A note holds a pitch on the trackpad. Other devices play it as a tap.";
 "waveform.pitch" = "Pitch";
 "waveform.play" = "Play";
 "waveform.preset.doubleTap.name" = "Double Tap";
@@ -482,6 +495,7 @@
 "waveform.preset.tap.name" = "Tap";
 "waveform.preset.tripleTap.name" = "Triple Tap";
 "waveform.strength" = "Strength";
+"waveform.tap" = "Tap";
 "waveform.tap-or-note" = "Tap or note";
 "waveform.try" = "Try";
 "window.onboarding.title" = "Welcome to Tactile";
